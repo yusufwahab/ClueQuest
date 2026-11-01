@@ -1,4 +1,7 @@
+import { existsSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import helmet from 'helmet';
@@ -45,7 +48,17 @@ export async function createApp(envOverrides: Record<string, string | undefined>
   const app = express();
   app.set('trust proxy', 1);
   app.disable('x-powered-by');
-  app.use(helmet({ contentSecurityPolicy: { directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] } }, crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+  // The API gets the strictest policy (it only returns JSON). The website needs its own scripts, styles, fonts and the live-game socket.
+  const apiHeaders = helmet({ contentSecurityPolicy: { directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] } }, crossOriginResourcePolicy: { policy: 'cross-origin' } });
+  const siteHeaders = helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'"], imgSrc: ["'self'", 'data:'], fontSrc: ["'self'", 'data:'],
+        connectSrc: ["'self'", 'ws:', 'wss:'], objectSrc: ["'none'"], baseUri: ["'self'"], formAction: ["'self'"], frameAncestors: ["'none'"],
+      },
+    },
+  });
+  app.use((req, res, next) => (req.path.startsWith('/api') ? apiHeaders : siteHeaders)(req, res, next));
   // CORS only lets our own web origins read responses. Credentials travel as bearer / attempt-token headers, never cookies.
   app.use(cors({ origin: env.ALLOWED_ORIGINS, methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], allowedHeaders: ['content-type', 'authorization', 'x-attempt-token'], maxAge: 600 }));
   app.use(express.json({ limit: '512kb' }));
@@ -53,6 +66,17 @@ export async function createApp(envOverrides: Record<string, string | undefined>
   app.get('/readyz', async (_req, res) => { try { await db.query('select 1'); res.json({ ok: true, db: db.kind }); } catch { res.status(503).json({ ok: false }); } });
   app.use('/api', routes(ctx));
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found', 'not_found')));
+
+  // The website itself: static files from the web build, and index.html for every page address (/sign-in, /q/abc, /join/123456 ...)
+  // so the browser router can take over. Skipped when no build exists (development uses the Vite dev server instead).
+  const webDist = env.WEB_DIST ?? fileURLToPath(new URL('../../web/dist', import.meta.url));
+  if (existsSync(join(webDist, 'index.html'))) {
+    app.use('/assets', express.static(join(webDist, 'assets'), { immutable: true, maxAge: '1y' })); // hashed file names: safe to cache forever
+    app.use('/assets', (_req, res) => void res.status(404).end()); // a missing asset must not come back as index.html
+    app.use(express.static(webDist, { index: false, maxAge: '1h' }));
+    app.get(/^\/(?!api\/|socket\.io\/|healthz$|readyz$).*/, (_req, res) => { res.setHeader('cache-control', 'no-cache'); res.sendFile(join(webDist, 'index.html')); });
+    console.log(`[web] serving the website from ${webDist}`);
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {

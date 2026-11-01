@@ -29,6 +29,8 @@ export const envSchema = z.object({
   /** Webhook retry backoff base (ms); delay = base * 2^tries. Tests shrink it. */
   WEBHOOK_BACKOFF_MS: z.coerce.number().int().min(10).default(30_000),
   WEBHOOK_MAX_TRIES: z.coerce.number().int().min(1).max(20).default(8),
+  /** Folder with the built website (apps/web/dist). Default: next to the server. When it has an index.html the server serves the site too. */
+  WEB_DIST: z.string().optional(),
   /** AI assistant (free tiers). Providers are tried in order, so a busy one falls through to the next. Neither key set = assistant off. */
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().default('gemini-2.5-flash'),

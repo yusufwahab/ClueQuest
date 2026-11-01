@@ -1,8 +1,14 @@
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { loadEnv } from '../env';
 import { migrate, openDb } from './db';
 import { Mailer } from '../email';
 import { QuizService } from '../quizzes';
 import { PartnerService } from '../partners';
+
+// Same rule as the server: use apps/server/.env if present, real environment variables win.
+const envFile = fileURLToPath(new URL('../../.env', import.meta.url));
+if (process.env.CLUEQUEST_SKIP_ENV_FILE !== '1' && existsSync(envFile)) process.loadEnvFile(envFile);
 
 // npm run partner:create -- --slug msva --name "MS Virtual Academy" --webhook https://example.org/hooks/cluequest --return https://example.org
 const args = process.argv.slice(2);
