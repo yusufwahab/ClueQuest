@@ -1,0 +1,71 @@
+@import '@fontsource-variable/inter/wght.css';
+@import 'tailwindcss';
+
+/* ClueQuest identity: bright, playful, game-like. Violet base with coral, sun, sky and mint accents. Mirrors packages/config themeTokens. */
+@theme {
+  --color-paper: #f4f2ff;
+  --color-surface: #ffffff;
+  --color-ink: #171347;
+  --color-muted: #5b5886;
+  --color-primary: #5b3df5;
+  --color-primary-dark: #4527d6;
+  --color-primary-soft: #ece8ff;
+  --color-accent: #12b886;
+  --color-accent-soft: #d9f6ec;
+  --color-sun: #ffc933;
+  --color-coral: #ff6b6b;
+  --color-sky: #38b6ff;
+  --color-warn: #b45309;
+  --color-warn-soft: #fff1d6;
+  --color-danger: #e03131;
+  --color-danger-soft: #ffe3e3;
+  --color-line: #dcd8f5;
+  --color-sidebar: #171347;
+  --font-sans: 'Inter Variable', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --animate-pop: pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+  --animate-float: float 5s ease-in-out infinite;
+  --animate-rise: rise 0.5s ease-out both;
+}
+
+@keyframes pop { 0% { transform: scale(0.6); } 100% { transform: scale(1); } }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--color-paper); color: var(--color-ink); font-family: var(--font-sans); line-height: 1.5; min-width: 320px; overflow-x: hidden; }
+  h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; }
+  h2 { font-size: 1.25rem; font-weight: 750; line-height: 1.25; }
+  h3 { font-size: 1.05rem; font-weight: 700; }
+  :focus-visible { outline: 3px solid var(--color-sky); outline-offset: 2px; }
+  button, a, input, select, textarea { touch-action: manipulation; }
+}
+
+@layer components {
+  .btn { @apply inline-flex min-h-12 cursor-pointer items-center justify-center rounded-xl px-5 py-2 text-base font-bold transition active:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50; }
+  .btn-primary { @apply bg-primary text-white shadow-[0_4px_0_0_#3a1fb0] hover:bg-primary-dark active:shadow-none; }
+  .btn-secondary { @apply border-2 border-[#cfc8f7] bg-surface text-ink shadow-[0_3px_0_0_#cfc8f7] hover:border-primary active:shadow-none; }
+  .btn-sun { @apply bg-sun text-ink shadow-[0_4px_0_0_#c99700] hover:brightness-105 active:shadow-none; }
+  .btn-danger { @apply bg-danger text-white shadow-[0_4px_0_0_#a61e1e] active:shadow-none; }
+  .btn-quiet { @apply text-primary underline-offset-2 hover:underline min-h-11 inline-flex items-center px-1 font-bold; }
+  .card { @apply rounded-2xl border border-line bg-surface p-5 shadow-[0_10px_30px_-18px_rgba(23,19,71,0.35)]; }
+  .field { @apply min-h-12 w-full rounded-xl border-2 border-[#cfc8f7] bg-surface px-3 py-2 text-base text-ink placeholder:text-muted focus:border-primary; }
+  .label { @apply mb-1 block text-sm font-bold; }
+  .hint { @apply text-sm text-muted; }
+  .notice { @apply rounded-xl border-2 px-4 py-3 text-base; }
+  .notice-info { @apply border-primary/30 bg-primary-soft; }
+  .notice-ok { @apply border-accent/50 bg-accent-soft; }
+  .notice-warn { @apply border-warn/40 bg-warn-soft; }
+  .notice-bad { @apply border-danger/50 bg-danger-soft; }
+  .table { @apply w-full border-collapse text-left text-sm; }
+  .table th { @apply border-b-2 border-ink/80 px-3 py-2 font-bold; }
+  .table td { @apply border-b border-line px-3 py-2 align-top; }
+  .container-page { @apply mx-auto w-full max-w-6xl px-4 sm:px-6; }
+  .opt { @apply flex min-h-14 w-full items-center gap-3 rounded-2xl border-2 px-3 py-3 text-left text-lg font-semibold transition enabled:active:translate-y-0.5; }
+  .opt-badge { @apply grid h-9 w-9 shrink-0 place-items-center rounded-xl text-base font-extrabold text-white; }
+  .chip { @apply inline-flex items-center rounded-full bg-primary-soft px-3 py-1 text-sm font-bold text-primary; }
+}
+
+.safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+.hero-bg { background: linear-gradient(135deg, #3a1fb0 0%, #5b3df5 55%, #7a5cff 100%); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .001ms !important; animation-duration: .001ms !important; } }

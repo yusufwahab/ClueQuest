@@ -1,0 +1,33 @@
+{
+  "name": "cluequest",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev:server": "npm run dev -w @cluequest/server",
+    "dev:web": "npm run dev -w @cluequest/web",
+    "dev:partner": "node tools/test-partner/server.mjs",
+    "build": "npm run build -w @cluequest/server && npm run build -w @cluequest/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "vitest run",
+    "test:e2e": "node scripts/e2e.mjs",
+    "partner:create": "npm run partner:create -w @cluequest/server --"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "tsx": "^4.20.0",
+    "vitest": "^5.0.5"
+  },
+  "optionalDependencies": {
+    "@rolldown/binding-win32-x64-msvc": "1.2.15",
+    "lightningcss-win32-x64-msvc": "^1.32.0"
+  }
+}
