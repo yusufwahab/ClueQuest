@@ -2,6 +2,9 @@ export class ApiError extends Error {
   constructor(public status: number, message: string, public code = 'error', public details?: any) { super(message); }
 }
 
+/** Where the server lives. Empty = the same address as the website (local dev proxy, or the server serving the site itself). Set VITE_API_URL when the website is hosted elsewhere, e.g. Vercel. */
+export const API_BASE = ((import.meta.env.VITE_API_URL as string | undefined) ?? '').trim().replace(/\/+$/, '');
+
 const TOKEN_KEY = 'cq.teacher';
 export const teacherToken = () => localStorage.getItem(TOKEN_KEY);
 export const setTeacherToken = (t: string | null) => (t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY));
@@ -14,7 +17,7 @@ export async function api<T = any>(method: string, path: string, opts: { body?: 
   if (opts.attempt) headers['x-attempt-token'] = opts.attempt;
   let res: Response;
   try {
-    res = await fetch(`/api${path}`, { method, headers, body: opts.body === undefined ? undefined : JSON.stringify(opts.body) });
+    res = await fetch(`${API_BASE}/api${path}`, { method, headers, body: opts.body === undefined ? undefined : JSON.stringify(opts.body) });
   } catch {
     throw new ApiError(0, 'Cannot reach the server. Check your connection.', 'offline');
   }
@@ -25,7 +28,7 @@ export async function api<T = any>(method: string, path: string, opts: { body?: 
 }
 
 export async function downloadCsv(path: string, filename: string) {
-  const res = await fetch(`/api${path}`, { headers: { authorization: `Bearer ${teacherToken()}` } });
+  const res = await fetch(`${API_BASE}/api${path}`, { headers: { authorization: `Bearer ${teacherToken()}` } });
   if (!res.ok) throw new ApiError(res.status, 'Download failed');
   const url = URL.createObjectURL(await res.blob());
   const a = document.createElement('a'); a.href = url; a.download = filename; a.click();

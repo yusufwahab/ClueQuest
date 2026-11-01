@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
+import { API_BASE } from './api';
 
 export interface RoomState {
   v: number; code: string; phase: 'lobby' | 'question' | 'locked' | 'finished' | 'cancelled'; title: string; style: 'points' | 'steps';
@@ -21,7 +22,7 @@ export function useRoom(code: string, auth: { token?: string; accessToken?: stri
   const authKey = `${auth.token ?? ''}|${auth.accessToken ?? ''}`;
 
   useEffect(() => {
-    const s = io({ auth: { code, ...(auth.token ? { token: auth.token } : {}), ...(auth.accessToken ? { accessToken: auth.accessToken } : {}) }, transports: ['websocket', 'polling'], reconnectionDelayMax: 3000 });
+    const s = io(API_BASE || undefined, { auth: { code, ...(auth.token ? { token: auth.token } : {}), ...(auth.accessToken ? { accessToken: auth.accessToken } : {}) }, transports: ['websocket', 'polling'], reconnectionDelayMax: 3000 });
     sock.current = s;
     s.on('connect', () => setConn('online'));
     s.on('disconnect', () => setConn('offline'));

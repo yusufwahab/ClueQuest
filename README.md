@@ -54,6 +54,12 @@ npm run test:e2e         # builds the web app, then Playwright (needs `npx playw
 
 `NODE_ENV=production` refuses PGlite, dev seeding and disabled rate limits, and requires `DB_DRIVER=pg`, `DATABASE_URL` and a 32+ character `AUTH_SECRET`. Run `npm run migrate -w @cluequest/server` to apply migrations. Live rooms are owned by a single server process (as in ElimQuest); do not run multiple instances without adding room-ownership coordination.
 
+### Deploy: website on Vercel, server on Render
+
+- **Render (server):** Build `npm install --include=dev && npm run build -w @cluequest/web && npm run build -w @cluequest/server`, Start `npm run start -w @cluequest/server`, health check `/healthz`. Set the production variables from `apps/server/.env.example`, with `PUBLIC_WEB_URL` and `ALLOWED_ORIGINS` set to the **Vercel** address (comma-separate several origins, no spaces). The server also serves the website itself, so the Render address works on its own too.
+- **Vercel (website):** import the repo with the **repo root** as the project root; `vercel.json` sets the install, build, output folder and the page rewrite. Add one environment variable: `VITE_API_URL=https://<your-render-service>.onrender.com`. It is read at build time, so redeploy after changing it.
+- With `VITE_API_URL` empty the website talks to its own address (local development and the Render-only setup).
+
 ## Partner integration
 
 [docs/PARTNER_INTEGRATION.md](docs/PARTNER_INTEGRATION.md) has the contract, example launch and result payloads, and how to verify with the local test partner.
