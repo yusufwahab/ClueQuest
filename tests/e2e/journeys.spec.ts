@@ -43,24 +43,27 @@ test.describe.serial('ClueQuest journeys', () => {
     await page.getByRole('link', { name: 'Create quest' }).first().click();
     await page.getByLabel('Title').fill('Algebra basics');
     await page.getByLabel('Subject (optional)').fill('Mathematics');
+    await page.getByRole('button', { name: 'Next: questions' }).click();
     for (let i = 0; i < 2; i++) {
-      if (i === 1) await page.getByRole('button', { name: 'Add question' }).click();
-      await page.getByLabel('Question', { exact: true }).nth(i).fill(`What is ${i + 2} + ${i + 2}?`);
-      await page.getByLabel('Option 1 text').nth(i).fill('Correct answer');
-      await page.getByLabel('Option 2 text').nth(i).fill('Wrong answer');
+      if (i === 1) await page.getByRole('button', { name: 'Add another question' }).click();
+      await page.getByLabel('Question', { exact: true }).fill(`What is ${i + 2} + ${i + 2}?`);
+      await page.getByLabel('Option 1 text').fill('Correct answer');
+      await page.getByLabel('Option 2 text').fill('Wrong answer');
     }
     await page.getByRole('button', { name: 'Save draft' }).click();
     await expect(page.getByText('Draft saved.')).toBeVisible();
     await expect(page).toHaveURL(/\/quizzes\/[0-9a-f-]{36}$/);
     quizId = page.url().split('/').pop()!;
 
+    await page.getByRole('button', { name: 'Next: review' }).click();
     await page.getByRole('link', { name: 'Preview as player' }).click();
     await expect(page.getByText('Question 1 of 2')).toBeVisible();
     await page.getByRole('radio', { name: /^Correct answer/ }).click();
     await expect(page.getByText(/ — correct/)).toBeVisible();
     await page.goBack();
 
-    await page.getByRole('button', { name: 'Publish' }).click();
+    await page.getByRole('button', { name: 'Next: review' }).click();
+    await page.getByRole('button', { name: 'Publish', exact: true }).click();
     await expect(page.getByText(/Published as version 1/)).toBeVisible();
     const check = await request.get(`/api/quizzes/${quizId}`, { headers: auth() });
     expect((await check.json()).latestVersion).toBe(1);
@@ -222,8 +225,9 @@ test.describe.serial('ClueQuest journeys', () => {
     await page.getByLabel('How many questions?').fill('4');
     await page.getByRole('button', { name: 'Generate draft' }).click();
     await expect(page.getByText('Added 4 questions from the AI assistant')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Questions (4)' })).toBeVisible();
     await expect(page.getByLabel('Title')).toHaveValue('Photosynthesis quest');
+    await page.getByRole('button', { name: 'Next: questions' }).click();
+    await expect(page.getByRole('heading', { name: 'Questions (4)' })).toBeVisible();
     await page.getByRole('button', { name: 'Save draft' }).click();
     await expect(page.getByText('Draft saved.')).toBeVisible();
   });

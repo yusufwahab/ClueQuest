@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { limits } from '@cluequest/config';
 import { validatePublishable } from '@cluequest/contracts';
 import { ApiError, api } from '../../lib/api';
-import { Field, Loading, Notice } from '../../components/ui';
+import { Field, Loading, Notice, PageHead, Stepper } from '../../components/ui';
 import AiAssistant, { type AiResult } from '../../components/AiAssistant';
 
 interface Opt { id: string; text: string }
@@ -17,6 +17,9 @@ const newQuestion = (): Q => { const a = uid(), b = uid(); return { id: uid(), t
 export default function QuizEditor() {
   const { id } = useParams();
   const nav = useNavigate();
+  const carried = (useLocation().state ?? {}) as { step?: number; qi?: number };
+  const [step, setStep] = useState(carried.step ?? (id ? 1 : 0));
+  const [qi, setQi] = useState(carried.qi ?? 0);
   const qc = useQueryClient();
   const [draft, setDraft] = useState<Draft>({ title: '', subject: '', instructions: '', questions: [newQuestion()] });
   const [meta, setMeta] = useState<{ latestVersion: number; allowPartners: boolean } | null>(null);
@@ -45,7 +48,7 @@ export default function QuizEditor() {
       const r = quizId.current ? await api('PUT', `/quizzes/${quizId.current}`, { body }) : await api('POST', '/quizzes', { body });
       quizId.current = r.id; setSavedId(r.id); setDirty(false); setMeta({ latestVersion: r.latestVersion, allowPartners: r.allowPartners });
       void qc.invalidateQueries({ queryKey: ['quizzes'] });
-      if (!id) nav(`/quizzes/${r.id}`, { replace: true });
+      if (!id) nav(`/quizzes/${r.id}`, { replace: true, state: { step, qi } });
       setMsg({ kind: 'ok', text: 'Draft saved.' });
       return r.id as string;
     } catch (e) { setMsg({ kind: 'bad', text: e instanceof ApiError ? e.message : 'Could not save' }); return null; } finally { setBusy(false); }
@@ -80,63 +83,123 @@ export default function QuizEditor() {
 
   if (loading) return <Loading />;
   const total = draft.questions.reduce((n, q) => n + (Number(q.marks) || 0), 0);
+  const cur = Math.min(qi, draft.questions.length - 1);
+  const q = draft.questions[cur]!;
+  const problems = validatePublishable(draft);
+  const blank = (x: Q) => !x.text.trim() || x.options.some((o) => !o.text.trim());
+  const addQuestion = () => { edit((d) => { d.questions.push(newQuestion()); }); setQi(draft.questions.length); };
+  const go = (n: number) => { setStep(n); window.scrollTo({ top: 0 }); };
+  const published = !!meta?.latestVersion && !dirty;
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1>{id ? 'Edit quest' : 'Create quest'}</h1>
-        <p className="hint">{meta?.latestVersion ? `Published v${meta.latestVersion}${dirty ? ' · unpublished changes' : ''}` : 'Draft'}</p>
-      </div>
+    <div className="space-y-6 pb-4">
+      <PageHead
+        back={{ to: '/quizzes', label: 'My quests' }}
+        title={id ? 'Edit quest' : 'Create quest'}
+        sub={meta?.latestVersion ? `Published v${meta.latestVersion}${dirty ? ' · you have unpublished changes' : ''}` : 'Draft: nobody can see it until you publish.'}
+      />
+      <Stepper steps={['Basics', 'Questions', 'Review and publish']} current={step} onGo={go} />
       {msg && <Notice kind={msg.kind}>{msg.text}{msg.list && <ul className="mt-2 list-disc pl-5">{msg.list.map((p) => <li key={p}>{p}</li>)}</ul>}</Notice>}
 
-      <AiAssistant onResult={applyAi} />
+      {step === 0 && (
+        <>
+          <AiAssistant onResult={applyAi} />
+          <section className="card space-y-4" aria-label="Quest details">
+            <Field label="Title" htmlFor="title"><input id="title" className="field" value={draft.title} onChange={(e) => edit((d) => { d.title = e.target.value; })} maxLength={120} /></Field>
+            <Field label="Subject (optional)" htmlFor="subject" hint="For example Mathematics, History, French, Technology."><input id="subject" className="field" value={draft.subject} onChange={(e) => edit((d) => { d.subject = e.target.value; })} maxLength={60} /></Field>
+            <Field label="Instructions (optional)" htmlFor="instr" hint="Shown to learners before they start."><textarea id="instr" className="field min-h-24" value={draft.instructions} onChange={(e) => edit((d) => { d.instructions = e.target.value; })} maxLength={2000} /></Field>
+          </section>
+        </>
+      )}
 
-      <section className="card space-y-4" aria-label="Quest details">
-        <Field label="Title" htmlFor="title"><input id="title" className="field" value={draft.title} onChange={(e) => edit((d) => { d.title = e.target.value; })} maxLength={120} /></Field>
-        <Field label="Subject (optional)" htmlFor="subject" hint="For example Mathematics, History, French, Technology."><input id="subject" className="field" value={draft.subject} onChange={(e) => edit((d) => { d.subject = e.target.value; })} maxLength={60} /></Field>
-        <Field label="Instructions (optional)" htmlFor="instr" hint="Shown to learners before they start."><textarea id="instr" className="field min-h-24" value={draft.instructions} onChange={(e) => edit((d) => { d.instructions = e.target.value; })} maxLength={2000} /></Field>
-      </section>
+      {step === 1 && (
+        <section className="space-y-4" aria-label="Questions">
+          <div className="flex flex-wrap items-baseline justify-between gap-2"><h2>Questions ({draft.questions.length})</h2><p className="hint">Total marks: {total}</p></div>
+          <nav aria-label="Jump to a question" className="flex flex-wrap gap-2">
+            {draft.questions.map((x, i) => (
+              <button key={x.id} type="button" onClick={() => setQi(i)} aria-label={`Go to question ${i + 1}${blank(x) ? ' (unfinished)' : ''}`} aria-current={i === cur ? 'true' : undefined}
+                className={`grid h-11 w-11 place-items-center rounded-xl border-2 font-extrabold ${i === cur ? 'border-primary bg-primary text-white' : blank(x) ? 'border-sun bg-warn-soft' : 'border-accent bg-accent-soft'}`}>{i + 1}</button>
+            ))}
+            <button type="button" className="h-11 rounded-xl border-2 border-dashed border-primary px-3 font-bold text-primary disabled:opacity-40" disabled={draft.questions.length >= limits.maxQuestions} onClick={addQuestion}>+ Add question</button>
+          </nav>
 
-      <section className="space-y-4" aria-label="Questions">
-        <div className="flex items-baseline justify-between"><h2>Questions ({draft.questions.length})</h2><p className="hint">Total marks: {total}</p></div>
-        {draft.questions.map((q, i) => (
           <fieldset key={q.id} className="card space-y-4">
-            <legend className="px-1 text-base font-semibold">Question {i + 1}</legend>
-            <Field label="Question" htmlFor={`q-${q.id}`}><textarea id={`q-${q.id}`} className="field min-h-20" value={q.text} onChange={(e) => setQ(i, (x) => { x.text = e.target.value; })} maxLength={1000} /></Field>
+            <legend className="px-1 text-base font-extrabold">Question {cur + 1} of {draft.questions.length}</legend>
+            <Field label="Question" htmlFor={`q-${q.id}`}><textarea id={`q-${q.id}`} className="field min-h-20" value={q.text} onChange={(e) => setQ(cur, (x) => { x.text = e.target.value; })} maxLength={1000} /></Field>
             <div>
-              <p className="label">Answer options — select the correct one</p>
+              <p className="label">Answer options. Tick the correct one.</p>
               <div className="space-y-2">
                 {q.options.map((o, j) => (
                   <div key={o.id} className="flex items-center gap-2">
-                    <input type="radio" className="h-6 w-6 shrink-0 accent-[#1f4fd8]" name={`correct-${q.id}`} checked={q.correctId === o.id} onChange={() => setQ(i, (x) => { x.correctId = o.id; })} aria-label={`Option ${j + 1} is correct`} />
-                    <input className="field" value={o.text} placeholder={`Option ${j + 1}`} aria-label={`Option ${j + 1} text`} maxLength={300} onChange={(e) => setQ(i, (x) => { x.options[j]!.text = e.target.value; })} />
-                    <button type="button" className="btn btn-secondary shrink-0" disabled={q.options.length <= limits.minOptions} onClick={() => setQ(i, (x) => { x.options.splice(j, 1); if (x.correctId === o.id) x.correctId = x.options[0]!.id; })} aria-label={`Remove option ${j + 1}`}>Remove</button>
+                    <input type="radio" className="h-6 w-6 shrink-0 accent-[#12b886]" name={`correct-${q.id}`} checked={q.correctId === o.id} onChange={() => setQ(cur, (x) => { x.correctId = o.id; })} aria-label={`Option ${j + 1} is correct`} />
+                    <input className="field" value={o.text} placeholder={`Option ${j + 1}`} aria-label={`Option ${j + 1} text`} maxLength={300} onChange={(e) => setQ(cur, (x) => { x.options[j]!.text = e.target.value; })} />
+                    <button type="button" className="btn btn-secondary shrink-0 !px-3" disabled={q.options.length <= limits.minOptions} onClick={() => setQ(cur, (x) => { x.options.splice(j, 1); if (x.correctId === o.id) x.correctId = x.options[0]!.id; })} aria-label={`Remove option ${j + 1}`}>✕</button>
                   </div>
                 ))}
               </div>
-              <button type="button" className="btn-quiet mt-2" disabled={q.options.length >= limits.maxOptions} onClick={() => setQ(i, (x) => { x.options.push({ id: uid(), text: '' }); })}>Add option</button>
+              <button type="button" className="btn-quiet mt-2" disabled={q.options.length >= limits.maxOptions} onClick={() => setQ(cur, (x) => { x.options.push({ id: uid(), text: '' }); })}>+ Add option</button>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Marks (academic)" htmlFor={`m-${q.id}`} hint="Counts towards the grade and pass mark."><input id={`m-${q.id}`} type="number" min={0.5} step={0.5} className="field" value={q.marks} onChange={(e) => setQ(i, (x) => { x.marks = Number(e.target.value); })} /></Field>
-              <Field label="Points (game reward)" htmlFor={`p-${q.id}`} hint="Used by the Points style. Wrong or unanswered earns 0."><input id={`p-${q.id}`} type="number" min={0} step={10} className="field" value={q.points} onChange={(e) => setQ(i, (x) => { x.points = Number(e.target.value); })} /></Field>
-            </div>
-            <Field label="Explanation (optional)" htmlFor={`e-${q.id}`} hint="Shown with the answer after the question is judged."><input id={`e-${q.id}`} className="field" value={q.explanation} onChange={(e) => setQ(i, (x) => { x.explanation = e.target.value; })} maxLength={1000} /></Field>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="btn btn-secondary" disabled={i === 0} onClick={() => edit((d) => { const [m] = d.questions.splice(i, 1); d.questions.splice(i - 1, 0, m!); })}>Move up</button>
-              <button type="button" className="btn btn-secondary" disabled={i === draft.questions.length - 1} onClick={() => edit((d) => { const [m] = d.questions.splice(i, 1); d.questions.splice(i + 1, 0, m!); })}>Move down</button>
-              <button type="button" className="btn btn-secondary" onClick={() => edit((d) => { d.questions.splice(i + 1, 0, { ...structuredClone(q), id: uid(), options: q.options.map((o) => ({ ...o, id: o.id + 'c' })), correctId: q.correctId + 'c' }); })}>Duplicate</button>
-              <button type="button" className="btn btn-secondary" disabled={draft.questions.length <= 1} onClick={() => edit((d) => { d.questions.splice(i, 1); })}>Delete question</button>
-            </div>
+            <details className="rounded-xl border border-line p-3">
+              <summary className="cursor-pointer font-bold">Marks, points and explanation (optional)</summary>
+              <div className="mt-3 space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Marks (academic)" htmlFor={`m-${q.id}`} hint="Counts towards the grade and pass mark."><input id={`m-${q.id}`} type="number" min={0.5} step={0.5} className="field" value={q.marks} onChange={(e) => setQ(cur, (x) => { x.marks = Number(e.target.value); })} /></Field>
+                  <Field label="Points (game reward)" htmlFor={`p-${q.id}`} hint="Used by the Points style. Wrong or unanswered earns 0."><input id={`p-${q.id}`} type="number" min={0} step={10} className="field" value={q.points} onChange={(e) => setQ(cur, (x) => { x.points = Number(e.target.value); })} /></Field>
+                </div>
+                <Field label="Explanation (optional)" htmlFor={`e-${q.id}`} hint="Shown with the answer after the question is judged."><input id={`e-${q.id}`} className="field" value={q.explanation} onChange={(e) => setQ(cur, (x) => { x.explanation = e.target.value; })} maxLength={1000} /></Field>
+              </div>
+            </details>
+            <details className="rounded-xl border border-line p-3">
+              <summary className="cursor-pointer font-bold">Move, copy or delete this question</summary>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" className="btn btn-secondary" disabled={cur === 0} onClick={() => { edit((d) => { const [m] = d.questions.splice(cur, 1); d.questions.splice(cur - 1, 0, m!); }); setQi(cur - 1); }}>Move earlier</button>
+                <button type="button" className="btn btn-secondary" disabled={cur === draft.questions.length - 1} onClick={() => { edit((d) => { const [m] = d.questions.splice(cur, 1); d.questions.splice(cur + 1, 0, m!); }); setQi(cur + 1); }}>Move later</button>
+                <button type="button" className="btn btn-secondary" onClick={() => { edit((d) => { d.questions.splice(cur + 1, 0, { ...structuredClone(q), id: uid(), options: q.options.map((o) => ({ ...o, id: o.id + 'c' })), correctId: q.correctId + 'c' }); }); setQi(cur + 1); }}>Duplicate</button>
+                <button type="button" className="btn btn-secondary text-danger" disabled={draft.questions.length <= 1} onClick={() => { edit((d) => { d.questions.splice(cur, 1); }); setQi(Math.max(0, cur - 1)); }}>Delete question</button>
+              </div>
+            </details>
           </fieldset>
-        ))}
-        <button type="button" className="btn btn-secondary" disabled={draft.questions.length >= limits.maxQuestions} onClick={() => edit((d) => { d.questions.push(newQuestion()); })}>Add question</button>
-      </section>
 
-      <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center gap-2 border-t border-line bg-paper px-4 py-3 safe-bottom md:-mx-8 md:px-8">
+          <div className="flex justify-between gap-2">
+            <button type="button" className="btn btn-secondary" disabled={cur === 0} onClick={() => setQi(cur - 1)}>← Previous question</button>
+            {cur < draft.questions.length - 1
+              ? <button type="button" className="btn btn-secondary" onClick={() => setQi(cur + 1)}>Next question →</button>
+              : <button type="button" className="btn btn-secondary" disabled={draft.questions.length >= limits.maxQuestions} onClick={addQuestion}>Add another question</button>}
+          </div>
+        </section>
+      )}
+
+      {step === 2 && (
+        <section className="space-y-4" aria-label="Review and publish">
+          <div className="card space-y-3">
+            <h2>Check before you publish</h2>
+            <ul className="space-y-1">
+              <li><strong>{draft.title.trim() || 'Untitled quest'}</strong>{draft.subject && <span className="hint"> · {draft.subject}</span>}</li>
+              <li>{draft.questions.length} question{draft.questions.length === 1 ? '' : 's'} · {total} marks in total</li>
+            </ul>
+            {problems.length === 0
+              ? <Notice kind="ok">Everything looks ready.</Notice>
+              : <Notice kind="warn">A few things to fix first:<ul className="mt-2 list-disc pl-5">{problems.map((p) => <li key={p}>{p}</li>)}</ul><button type="button" className="btn-quiet mt-1" onClick={() => go(1)}>Go back to the questions</button></Notice>}
+            <p className="hint">Publishing locks in this version so learners never see half-finished edits. You can edit and publish again later.</p>
+          </div>
+          {published && (
+            <div className="card space-y-3 border-2 border-accent/50 bg-accent-soft/50">
+              <h2>Your quest is live. What next?</h2>
+              <p className="hint">Choose how people will take it. You will get a link or a code to copy.</p>
+              <Link className="btn btn-primary w-full sm:w-auto" to={`/quizzes/${savedId}/use`}>Share or play this quest</Link>
+            </div>
+          )}
+        </section>
+      )}
+
+      <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center gap-2 border-t border-line bg-paper px-4 py-3 safe-bottom md:-mx-8 md:px-8">
+        {step > 0 && <button className="btn btn-secondary" onClick={() => go(step - 1)}>Back</button>}
         <button className="btn btn-secondary" onClick={save} disabled={busy}>Save draft</button>
-        {savedId && <Link className="btn btn-secondary" to={`/quizzes/${savedId}/preview`} onClick={(e) => { if (dirty) { e.preventDefault(); void save().then((ok) => { if (ok) nav(`/quizzes/${ok}/preview`); }); } }}>Preview as player</Link>}
-        <button className="btn btn-primary" onClick={publish} disabled={busy}>Publish</button>
-        {meta?.latestVersion ? <Link className="btn btn-secondary" to={`/quizzes/${savedId}/use`}>Use this quest</Link> : null}
+        {step === 2 && savedId && <Link className="btn btn-secondary" to={`/quizzes/${savedId}/preview`} onClick={(e) => { if (dirty) { e.preventDefault(); void save().then((ok) => { if (ok) nav(`/quizzes/${ok}/preview`); }); } }}>Preview as player</Link>}
+        <span className="flex-1" />
         {dirty && <span className="hint">Unsaved changes</span>}
+        {step < 2 && <button className="btn btn-primary" onClick={() => go(step + 1)}>{step === 0 ? 'Next: questions' : 'Next: review'}</button>}
+        {step === 2 && <button className="btn btn-primary" onClick={publish} disabled={busy}>Publish</button>}
       </div>
     </div>
   );

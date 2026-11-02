@@ -1,4 +1,119 @@
-import type { ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { Link } from 'react-router';
+
+/** Copies text. Falls back to a hidden textarea where the async clipboard is unavailable (plain http, older phones). */
+async function copyText(text: string) {
+  try { await navigator.clipboard.writeText(text); return true; } catch { /* fall through */ }
+  const t = document.createElement('textarea');
+  t.value = text; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.opacity = '0';
+  document.body.appendChild(t); t.select();
+  try { return document.execCommand('copy'); } finally { t.remove(); }
+}
+
+/** One-tap copy with visible and announced confirmation. */
+export function CopyButton({ value, label = 'Copy', what, className = 'btn btn-secondary' }: { value: string; label?: string; what?: string; className?: string }) {
+  const [done, setDone] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const click = async () => {
+    if (await copyText(value)) { setDone(true); clearTimeout(timer.current); timer.current = setTimeout(() => setDone(false), 2000); }
+  };
+  return (
+    <button type="button" className={`${className} shrink-0`} onClick={click} aria-label={what ? `${label} ${what}` : undefined}>
+      {done ? '✓ Copied' : label}
+      <span className="sr-only" role="status">{done ? `${what ?? 'Text'} copied` : ''}</span>
+    </button>
+  );
+}
+
+/** A read-only value (link, code, ID) with a plain-words label and a copy button right next to it. */
+export function CopyField({ label, value, hint, big = false, openable = false }: { label: string; value: string; hint?: string; big?: boolean; openable?: boolean }) {
+  const id = useId();
+  return (
+    <div>
+      <label className="label" htmlFor={id}>{label}</label>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <input id={id} readOnly value={value} onFocus={(e) => e.currentTarget.select()} className={`field min-w-0 flex-1 ${big ? 'text-center text-3xl font-extrabold tracking-widest' : 'text-sm'}`} />
+        <div className="flex gap-2">
+          <CopyButton value={value} what={label.toLowerCase()} className="btn btn-primary flex-1 sm:flex-none" />
+          {openable && <a className="btn btn-secondary" href={value} target="_blank" rel="noreferrer">Open</a>}
+        </div>
+      </div>
+      {hint && <p className="hint mt-1">{hint}</p>}
+    </div>
+  );
+}
+
+/** Dialog for the small, focused tasks that should not crowd a page. Esc, the close button and the backdrop all close it. */
+export function Modal({ title, onClose, children, wide = false }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
+  const titleId = useId();
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const prev = document.activeElement as HTMLElement | null;
+    const key = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'Tab' && box.current) { // keep focus inside the dialog
+        const f = [...box.current.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input:not([disabled]),select,textarea')];
+        if (!f.length) return;
+        const first = f[0]!, last = f[f.length - 1]!;
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener('keydown', key);
+    document.body.style.overflow = 'hidden';
+    box.current?.querySelector<HTMLElement>('input,textarea,select')?.focus();
+    return () => { document.removeEventListener('keydown', key); document.body.style.overflow = ''; prev?.focus(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/60 p-0 sm:items-center sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div ref={box} role="dialog" aria-modal="true" aria-labelledby={titleId} className={`max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-surface p-5 shadow-2xl sm:rounded-3xl ${wide ? 'sm:max-w-2xl' : 'sm:max-w-lg'}`}>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <h2 id={titleId}>{title}</h2>
+          <button type="button" className="btn btn-secondary !min-h-10 !px-3" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** "1 Basics → 2 Questions → 3 Publish" progress strip. Steps already reached can be clicked to go back. */
+export function Stepper({ steps, current, onGo }: { steps: string[]; current: number; onGo?: (i: number) => void }) {
+  return (
+    <ol className="flex items-center gap-1 sm:gap-2" aria-label="Progress">
+      {steps.map((s, i) => {
+        const state = i < current ? 'done' : i === current ? 'now' : 'next';
+        const body = (
+          <>
+            <span aria-hidden className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-sm font-extrabold ${state === 'next' ? 'bg-[#e4e0fb] text-muted' : state === 'done' ? 'bg-accent text-white' : 'bg-primary text-white'}`}>{state === 'done' ? '✓' : i + 1}</span>
+            <span className={`truncate text-sm font-bold ${state === 'now' ? 'text-ink' : 'text-muted'} ${state === 'now' ? '' : 'hidden sm:inline'}`}>{s}</span>
+          </>
+        );
+        return (
+          <li key={s} className="flex min-w-0 flex-1 items-center gap-2" aria-current={state === 'now' ? 'step' : undefined}>
+            {state === 'done' && onGo ? <button type="button" className="flex min-w-0 items-center gap-2" onClick={() => onGo(i)}>{body}</button> : <span className="flex min-w-0 items-center gap-2">{body}</span>}
+            {i < steps.length - 1 && <span aria-hidden className={`h-0.5 flex-1 ${i < current ? 'bg-accent' : 'bg-[#e4e0fb]'}`} />}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** Page title with a plain "back" link so a new user always knows where they are and how to return. */
+export function PageHead({ title, sub, back, actions }: { title: ReactNode; sub?: ReactNode; back?: { to: string; label: string }; actions?: ReactNode }) {
+  return (
+    <header className="space-y-1">
+      {back && <Link to={back.to} className="btn-quiet !min-h-9 !px-0 text-sm">← {back.label}</Link>}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0"><h1>{title}</h1>{sub && <p className="hint mt-1">{sub}</p>}</div>
+        {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      </div>
+    </header>
+  );
+}
 
 export function Notice({ kind = 'info', children, role }: { kind?: 'info' | 'ok' | 'warn' | 'bad'; children: ReactNode; role?: string }) {
   return <div className={`notice notice-${kind}`} role={role ?? (kind === 'bad' ? 'alert' : 'status')}>{children}</div>;

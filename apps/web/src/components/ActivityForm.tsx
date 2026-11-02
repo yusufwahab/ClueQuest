@@ -1,17 +1,20 @@
 import { useState } from 'react';
 import { ApiError, api } from '../lib/api';
-import { Field, Notice } from './ui';
+import { Field, Icon, Notice, Stepper } from './ui';
 
 type Mode = 'solo' | 'live' | 'cbt';
-const MODE_TEXT: Record<Mode, { name: string; desc: string }> = {
-  solo: { name: 'Solo practice', desc: 'A public link. Anyone with it can play on their own. Good for practice and revision.' },
-  live: { name: 'Live game', desc: 'You host a room with a code. Everyone answers the same question together.' },
-  cbt: { name: 'CBT exam', desc: 'Individual exam with a window, timer, attempt limit and results released by you. Candidates use personal invitation links.' },
+const MODE_TEXT: Record<Mode, { name: string; icon: 'solo' | 'live' | 'exam'; desc: string }> = {
+  solo: { name: 'Solo practice', icon: 'solo', desc: 'You get a link. Anyone with it plays on their own, any time. Best for practice and revision.' },
+  live: { name: 'Live game', icon: 'live', desc: 'You get a room code. Everyone answers the same question together while you run the game.' },
+  cbt: { name: 'CBT exam', icon: 'exam', desc: 'A timed exam with a window and attempt limit. Each candidate gets a personal link.' },
 };
 
 const toIso = (v: string) => (v ? new Date(v).toISOString() : null);
 
-/** One form for every way to use a published quest. Participation (mode) and scoring (style) are independent choices. */
+/**
+ * Turns a published quest into something people can take, one decision per screen:
+ * 1. how they will take it, 2. how it is scored, 3. the few settings that apply. Participation (mode) and scoring (style) stay independent.
+ */
 export default function ActivityForm({ quizId, fixedMode, submitLabel = 'Create', onCreated }: { quizId: string; fixedMode?: Mode; submitLabel?: string; onCreated: (activity: any) => void }) {
   const [mode, setMode] = useState<Mode>(fixedMode ?? 'solo');
   const [style, setStyle] = useState<'points' | 'steps'>('points');
@@ -21,8 +24,13 @@ export default function ActivityForm({ quizId, fixedMode, submitLabel = 'Create'
   const [attempts, setAttempts] = useState(1); const [release, setRelease] = useState<'immediate' | 'after_close' | 'manual'>('immediate'); const [showAnswers, setShowAnswers] = useState(true);
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault(); setError(''); setBusy(true);
+  const names = fixedMode ? ['Scoring', 'Settings'] : ['How', 'Scoring', 'Settings'];
+  const [at, setAt] = useState(0);
+  const page = names[at]!;
+  const last = at === names.length - 1;
+
+  const create = async () => {
+    setError(''); setBusy(true);
     try {
       const body: any = { quizId, mode, style, steps: { wrong }, passMarkPercent: pass === '' ? null : Number(pass), showAnswers };
       if (mode === 'solo') body.instantFeedback = instant;
@@ -31,71 +39,101 @@ export default function ActivityForm({ quizId, fixedMode, submitLabel = 'Create'
       onCreated(await api('POST', '/activities', { body }));
     } catch (err) { setError(err instanceof ApiError ? err.message : 'Could not create'); } finally { setBusy(false); }
   };
+  const submit = (e: React.FormEvent) => { e.preventDefault(); if (last) void create(); else setAt(at + 1); };
+
+  const choice = (on: boolean) => `block cursor-pointer rounded-2xl border-2 p-4 transition has-[:focus-visible]:outline-[3px] has-[:focus-visible]:outline-sky ${on ? 'border-primary bg-primary-soft shadow-[0_4px_0_0_#cfc8f7]' : 'border-line bg-surface hover:border-primary/50'}`;
 
   return (
     <form className="space-y-5" onSubmit={submit}>
+      <Stepper steps={names} current={at} onGo={setAt} />
       {error && <Notice kind="bad">{error}</Notice>}
-      {!fixedMode && (
-        <fieldset>
-          <legend className="label">How will people take it?</legend>
-          <div className="grid gap-2 sm:grid-cols-3">
+
+      {page === 'How' && (
+        <fieldset className="space-y-3">
+          <legend className="text-lg font-extrabold">How will people take it?</legend>
+          <div className="grid gap-3 sm:grid-cols-3">
             {(Object.keys(MODE_TEXT) as Mode[]).map((m) => (
-              <label key={m} className={`block cursor-pointer rounded-md border-2 p-3 ${mode === m ? 'border-primary bg-primary-soft' : 'border-line bg-surface'}`}>
-                <input type="radio" className="mr-2 accent-[#1f4fd8]" name="mode" checked={mode === m} onChange={() => setMode(m)} />
-                <span className="font-semibold">{MODE_TEXT[m].name}</span>
+              <label key={m} className={choice(mode === m)}>
+                <input type="radio" className="sr-only" name="mode" checked={mode === m} onChange={() => setMode(m)} />
+                <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary text-white"><Icon name={MODE_TEXT[m].icon} className="h-5 w-5" /></span>
+                <span className="mt-2 block font-extrabold">{MODE_TEXT[m].name}</span>
                 <span className="hint mt-1 block">{MODE_TEXT[m].desc}</span>
               </label>
             ))}
           </div>
         </fieldset>
       )}
-      <fieldset>
-        <legend className="label">Scoring style</legend>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <label className={`block cursor-pointer rounded-md border-2 p-3 ${style === 'points' ? 'border-primary bg-primary-soft' : 'border-line bg-surface'}`}>
-            <input type="radio" className="mr-2 accent-[#1f4fd8]" name="style" checked={style === 'points'} onChange={() => setStyle('points')} />
-            <span className="font-semibold">Points</span><span className="hint mt-1 block">Each correct answer earns the points you set on that question. Wrong or unanswered earns zero.</span>
-          </label>
-          <label className={`block cursor-pointer rounded-md border-2 p-3 ${style === 'steps' ? 'border-primary bg-primary-soft' : 'border-line bg-surface'}`}>
-            <input type="radio" className="mr-2 accent-[#1f4fd8]" name="style" checked={style === 'steps'} onChange={() => setStyle('steps')} />
-            <span className="font-semibold">Steps</span><span className="hint mt-1 block">Start at step 0. A correct answer moves up one step.</span>
-          </label>
-        </div>
-        <p className="hint mt-2">Marks for the grade and pass mark are always tracked separately from Points and Steps.</p>
-      </fieldset>
-      {style === 'steps' && (
-        <Field label="When an answer is wrong or missing" htmlFor="wrong" hint="A player never goes below step 0.">
-          <select id="wrong" className="field" value={wrong} onChange={(e) => setWrong(e.target.value as 'stay' | 'down')}>
-            <option value="stay">Stay on the same step</option><option value="down">Move down one step</option>
-          </select>
-        </Field>
-      )}
-      <Field label="Pass mark (% of marks, optional)" htmlFor="pass" hint="Passing depends on marks only, never on points or steps.">
-        <input id="pass" type="number" min={0} max={100} className="field" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="e.g. 50" />
-      </Field>
-      {mode === 'solo' && (
-        <label className="flex items-start gap-3"><input type="checkbox" className="mt-1 h-5 w-5 accent-[#1f4fd8]" checked={instant} onChange={(e) => setInstant(e.target.checked)} />
-          <span><span className="font-semibold">Instant feedback</span><span className="hint block">Each answer is judged and locked as soon as it is chosen. Without it, learners can change answers until they submit.</span></span></label>
-      )}
-      {mode === 'live' && <Field label="Seconds per question" htmlFor="secs"><input id="secs" type="number" min={5} max={300} className="field" value={secs} onChange={(e) => setSecs(Number(e.target.value))} /></Field>}
-      {mode === 'cbt' && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Opens (optional)" htmlFor="opens"><input id="opens" type="datetime-local" className="field" value={opens} onChange={(e) => setOpens(e.target.value)} /></Field>
-          <Field label="Closes (optional)" htmlFor="closes"><input id="closes" type="datetime-local" className="field" value={closes} onChange={(e) => setCloses(e.target.value)} /></Field>
-          <Field label="Duration (minutes)" htmlFor="dur" hint="The server ends the attempt at this time, even if the page is closed."><input id="dur" type="number" min={1} max={600} className="field" value={duration} onChange={(e) => setDuration(Number(e.target.value))} /></Field>
-          <Field label="Attempts allowed" htmlFor="att"><input id="att" type="number" min={1} max={20} className="field" value={attempts} onChange={(e) => setAttempts(Number(e.target.value))} /></Field>
-          <Field label="Release results" htmlFor="rel">
-            <select id="rel" className="field" value={release} onChange={(e) => setRelease(e.target.value as typeof release)}>
-              <option value="immediate">Immediately after submission</option><option value="after_close">After the exam closes</option><option value="manual">When I release them</option>
-            </select>
-          </Field>
+
+      {page === 'Scoring' && (
+        <div className="space-y-4">
+          <fieldset className="space-y-3">
+            <legend className="text-lg font-extrabold">How should it be scored?</legend>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className={choice(style === 'points')}>
+                <input type="radio" className="sr-only" name="style" checked={style === 'points'} onChange={() => setStyle('points')} />
+                <span className="block font-extrabold">Points</span><span className="hint mt-1 block">Each correct answer earns the points you set on that question. Wrong or skipped earns zero.</span>
+              </label>
+              <label className={choice(style === 'steps')}>
+                <input type="radio" className="sr-only" name="style" checked={style === 'steps'} onChange={() => setStyle('steps')} />
+                <span className="block font-extrabold">Steps</span><span className="hint mt-1 block">Everyone starts at step 0 and climbs one step for each correct answer.</span>
+              </label>
+            </div>
+            <p className="hint">Marks (the grade) are always counted separately, whichever you pick.</p>
+          </fieldset>
+          {style === 'steps' && (
+            <Field label="When an answer is wrong or missing" htmlFor="wrong" hint="Nobody goes below step 0.">
+              <select id="wrong" className="field" value={wrong} onChange={(e) => setWrong(e.target.value as 'stay' | 'down')}>
+                <option value="stay">Stay on the same step</option><option value="down">Move down one step</option>
+              </select>
+            </Field>
+          )}
         </div>
       )}
-      {mode !== 'live' && (
-        <label className="flex items-start gap-3"><input type="checkbox" className="mt-1 h-5 w-5 accent-[#1f4fd8]" checked={showAnswers} onChange={(e) => setShowAnswers(e.target.checked)} />
-          <span><span className="font-semibold">Show correct answers in the released result</span></span></label>
+
+      {page === 'Settings' && (
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-lg font-extrabold">Last step: a few settings</h3>
+            <p className="hint">{MODE_TEXT[mode].name} · {style === 'points' ? 'Points' : 'Steps'}. The defaults are fine, so you can create it as it is.</p>
+          </div>
+          {mode === 'live' && <Field label="Seconds per question" htmlFor="secs"><input id="secs" type="number" min={5} max={300} className="field" value={secs} onChange={(e) => setSecs(Number(e.target.value))} /></Field>}
+          {mode === 'solo' && (
+            <label className="flex items-start gap-3"><input type="checkbox" className="mt-1 h-5 w-5 accent-[#5b3df5]" checked={instant} onChange={(e) => setInstant(e.target.checked)} />
+              <span><span className="font-semibold">Instant feedback</span><span className="hint block">Each answer is checked and locked as soon as it is chosen. Off: learners can change answers until they submit.</span></span></label>
+          )}
+          {mode === 'cbt' && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Duration (minutes)" htmlFor="dur" hint="The exam ends at this time even if the page is closed."><input id="dur" type="number" min={1} max={600} className="field" value={duration} onChange={(e) => setDuration(Number(e.target.value))} /></Field>
+              <Field label="Attempts allowed" htmlFor="att"><input id="att" type="number" min={1} max={20} className="field" value={attempts} onChange={(e) => setAttempts(Number(e.target.value))} /></Field>
+              <Field label="Release results" htmlFor="rel">
+                <select id="rel" className="field" value={release} onChange={(e) => setRelease(e.target.value as typeof release)}>
+                  <option value="immediate">Immediately after submission</option><option value="after_close">After the exam closes</option><option value="manual">When I release them</option>
+                </select>
+              </Field>
+              <Field label="Pass mark (% of marks)" htmlFor="pass" hint="Optional. Based on marks only."><input id="pass" type="number" min={0} max={100} className="field" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="e.g. 50" /></Field>
+            </div>
+          )}
+          {mode !== 'cbt' && <Field label="Pass mark (% of marks, optional)" htmlFor="pass" hint="Based on marks only, never on points or steps."><input id="pass" type="number" min={0} max={100} className="field" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="e.g. 50" /></Field>}
+          {mode === 'cbt' && (
+            <details className="rounded-xl border border-line p-3">
+              <summary className="cursor-pointer font-bold">Opening and closing times (optional)</summary>
+              <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                <Field label="Opens" htmlFor="opens"><input id="opens" type="datetime-local" className="field" value={opens} onChange={(e) => setOpens(e.target.value)} /></Field>
+                <Field label="Closes" htmlFor="closes"><input id="closes" type="datetime-local" className="field" value={closes} onChange={(e) => setCloses(e.target.value)} /></Field>
+              </div>
+            </details>
+          )}
+          {mode !== 'live' && (
+            <label className="flex items-start gap-3"><input type="checkbox" className="mt-1 h-5 w-5 accent-[#5b3df5]" checked={showAnswers} onChange={(e) => setShowAnswers(e.target.checked)} />
+              <span className="font-semibold">Show the correct answers in the result</span></label>
+          )}
+        </div>
       )}
-      <button className="btn btn-primary" disabled={busy}>{submitLabel}</button>
+
+      <div className="flex flex-wrap items-center gap-3">
+        {at > 0 && <button type="button" className="btn btn-secondary" onClick={() => setAt(at - 1)}>Back</button>}
+        <button className="btn btn-primary" disabled={busy}>{last ? submitLabel : 'Next'}</button>
+      </div>
     </form>
   );
 }
