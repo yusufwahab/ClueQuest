@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { brand } from '@cluequest/config';
 import { formatRoomCode, normaliseRoomCode } from '@cluequest/game-core';
 import { ApiError, api } from '../../lib/api';
-import { Notice } from '../../components/ui';
+import { Backdrop, Logo, Notice } from '../../components/ui';
 
 export const roomKey = (code: string) => `cq.room.${code}`;
 
@@ -33,11 +33,11 @@ export default function JoinRoom() {
   };
 
   return (
-    <main className="container-page max-w-md py-10">
-      <Link to="/" className="mb-6 block text-xl font-bold">{brand.name}</Link>
-      <form className="card space-y-4" onSubmit={join}>
-        <h1>Join a live game</h1>
-        {!params.code && <div><label className="label" htmlFor="rc">Room code</label><input id="rc" className="field text-center text-2xl tracking-widest" inputMode="numeric" value={formatRoomCode(code)} onChange={(e) => setCode(normaliseRoomCode(e.target.value).slice(0, 6))} placeholder="000 000" /></div>}
+    <Backdrop><main className="container-page max-w-md py-10">
+      <Link to="/" className="mb-6 flex items-center gap-2.5 font-display text-2xl font-semibold text-white"><Logo light size={34} />{brand.name}</Link>
+      <form className="card animate-rise space-y-4" onSubmit={join}>
+        <h1 className="text-3xl">Join a live game</h1>
+        {!params.code && <div><label className="label" htmlFor="rc">Room code</label><input id="rc" className="field text-center text-2xlst" inputMode="numeric" value={formatRoomCode(code)} onChange={(e) => setCode(normaliseRoomCode(e.target.value).slice(0, 6))} placeholder="000 000" /></div>}
         {room && <Notice kind="ok"><strong>{room.title}</strong> · {room.style === 'points' ? 'Points' : 'Steps'} · {room.players} joined</Notice>}
         {error && <Notice kind="bad">{error}</Notice>}
         {saved && room ? (
@@ -46,6 +46,6 @@ export default function JoinRoom() {
         <div><label className="label" htmlFor="nick">Your nickname</label><input id="nick" className="field" value={nick} onChange={(e) => setNick(e.target.value)} maxLength={20} autoComplete="nickname" required={!saved} /></div>
         <button className="btn btn-primary w-full" disabled={busy || !room}>{saved ? 'Rejoin game' : 'Join game'}</button>
       </form>
-    </main>
+    </main></Backdrop>
   );
 }

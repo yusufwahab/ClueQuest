@@ -4,7 +4,9 @@ import { formatRoomCode } from '@cluequest/game-core';
 import { teacherToken } from '../../lib/api';
 import { useRoom } from '../../lib/useRoom';
 import { Standings, Timer, useCountdown } from '../../components/LiveParts';
-import { CopyButton, CopyField, Loading, Notice } from '../../components/ui';
+import { CopyButton, CopyField, Loading, Notice, PageHead } from '../../components/ui';
+import { StepRace } from '../../components/StepScene';
+import { QuestionImage, Rich } from '../../components/Rich';
 
 export default function HostRoom() {
   const { code = '' } = useParams();
@@ -19,10 +21,11 @@ export default function HostRoom() {
   const last = s.qIndex + 1 >= s.total;
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div><h1>{s.title}</h1><p className="hint">{s.style === 'points' ? 'Points' : `Steps (wrong: ${s.steps.wrong === 'down' ? 'move down' : 'stay'})`} · {s.total} questions · {s.secondsPerQuestion}s each</p></div>
-        {s.phase !== 'lobby' && <div className="text-right"><p className="hint">Room code</p><p className="flex items-center justify-end gap-2"><span className="text-3xl font-extrabold tracking-widest" aria-label={`Room code ${code.split('').join(' ')}`}>{formatRoomCode(code)}</span><CopyButton value={code} what="room code" /></p></div>}
-      </div>
+      <PageHead
+        title={s.title}
+        sub={`${s.style === 'points' ? 'Points' : `Steps (wrong: ${s.steps.wrong === 'down' ? 'move down' : 'stay'})`} · ${s.total} questions · ${s.secondsPerQuestion}s each`}
+        actions={s.phase !== 'lobby' ? <div className="flex items-center gap-2 rounded-2xl bg-white/15 px-3 py-2"><span className="text-sm font-bold">Room code</span><span className="font-display text-3xl font-semiboldst" aria-label={`Room code ${code.split('').join(' ')}`}>{formatRoomCode(code)}</span><CopyButton value={code} what="room code" /></div> : undefined}
+      />
       {conn !== 'online' && <Notice kind="warn">Reconnecting… the game keeps running on the server.</Notice>}
       {err && <Notice kind="bad">{err}</Notice>}
 
@@ -50,20 +53,24 @@ export default function HostRoom() {
       {(s.phase === 'question' || s.phase === 'locked') && s.question && (
         <section className="card space-y-4">
           <p className="hint">Question {s.qIndex + 1} of {s.total}</p>
-          <h2 className="text-2xl">{s.question.text}</h2>
+          <h2 className="text-2xl"><Rich text={s.question.text} /></h2>
+          <QuestionImage image={s.question.image} />
           <ul className="grid gap-2 sm:grid-cols-2">{s.question.options.map((o) => {
             const correct = s.phase === 'locked' && o.id === s.question!.correctId;
-            return <li key={o.id} className={`rounded-md border-2 px-4 py-3 ${correct ? 'border-accent bg-accent-soft font-semibold' : 'border-line'}`}>{o.text}{correct ? ' — correct' : ''}{s.phase === 'locked' && <span className="hint block">{s.question!.counts?.[o.id] ?? 0} chose this</span>}</li>;
+            return <li key={o.id} className={`rounded-md border-2 px-4 py-3 ${correct ? 'border-accent bg-accent-soft font-semibold' : 'border-line'}`}><Rich text={o.text} inline />{correct ? ' — correct' : ''}{s.phase === 'locked' && <span className="hint block">{s.question!.counts?.[o.id] ?? 0} chose this</span>}</li>;
           })}</ul>
           {s.phase === 'question' && <Timer left={left} total={s.secondsPerQuestion} />}
           <p aria-live="polite"><strong>{s.answered}</strong> of {s.playerCount} answered</p>
-          {s.phase === 'locked' && s.question.explanation && <Notice kind="info">{s.question.explanation}</Notice>}
+          {s.phase === 'locked' && s.question.explanation && <Notice kind="info"><Rich text={s.question.explanation} /></Notice>}
           <div className="flex gap-2">
             {s.phase === 'question' && <button className="btn btn-primary" onClick={() => cmd('lock')}>Lock answers now</button>}
             {s.phase === 'locked' && <button className="btn btn-primary" onClick={() => cmd('next')}>{last ? 'Show final results' : 'Next question'}</button>}
             <button className="btn btn-secondary" onClick={() => cmd('end')}>End game</button>
           </div>
         </section>
+      )}
+      {s.style === 'steps' && s.phase !== 'lobby' && s.phase !== 'cancelled' && (
+        <section className="space-y-2"><h2>The staircase</h2><StepRace size="big" racers={s.board} max={s.total} />{s.phase === 'question' && <p className="hint">Positions update when you lock the question.</p>}</section>
       )}
       {s.phase === 'locked' && <section className="space-y-2"><h2>Standings</h2><Standings rows={s.standings} style={s.style} total={s.total} /></section>}
 

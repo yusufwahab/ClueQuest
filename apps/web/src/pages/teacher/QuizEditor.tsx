@@ -6,19 +6,24 @@ import { validatePublishable } from '@cluequest/contracts';
 import { ApiError, api } from '../../lib/api';
 import { Field, Loading, Notice, PageHead, Stepper } from '../../components/ui';
 import AiAssistant, { type AiResult } from '../../components/AiAssistant';
+import QuestionMedia from '../../components/QuestionMedia';
+import { Rich, hasMath } from '../../components/Rich';
+import ScoringChoice, { type Style, type Wrong } from '../../components/ScoringChoice';
 
 interface Opt { id: string; text: string }
-interface Q { id: string; text: string; options: Opt[]; correctId: string; marks: number; points: number; explanation: string }
+interface Q { id: string; text: string; options: Opt[]; correctId: string; marks: number; points: number; explanation: string; image?: { id: string; alt: string; url?: string | null } | null }
 interface Draft { title: string; subject: string; instructions: string; questions: Q[] }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
-const newQuestion = (): Q => { const a = uid(), b = uid(); return { id: uid(), text: '', options: [{ id: a, text: '' }, { id: b, text: '' }], correctId: a, marks: 1, points: 100, explanation: '' }; };
+const newQuestion = (): Q => { const a = uid(), b = uid(); return { id: uid(), text: '', options: [{ id: a, text: '' }, { id: b, text: '' }], correctId: a, marks: 1, points: 100, explanation: '', image: null }; };
 
 export default function QuizEditor() {
   const { id } = useParams();
   const nav = useNavigate();
   const carried = (useLocation().state ?? {}) as { step?: number; qi?: number };
-  const [step, setStep] = useState(carried.step ?? (id ? 1 : 0));
+  const [step, setStep] = useState(carried.step ?? (id ? 2 : 0));
+  const [play, setPlayState] = useState<{ style: Style; wrong: Wrong; pass: string }>({ style: 'points', wrong: 'stay', pass: '' });
+  const setPlay = (p: Partial<typeof play>) => { setPlayState((x) => ({ ...x, ...p })); setDirty(true); };
   const [qi, setQi] = useState(carried.qi ?? 0);
   const qc = useQueryClient();
   const [draft, setDraft] = useState<Draft>({ title: '', subject: '', instructions: '', questions: [newQuestion()] });
@@ -35,6 +40,7 @@ export default function QuizEditor() {
     api('GET', `/quizzes/${id}`).then((r) => {
       setDraft({ title: r.title, subject: r.subject, instructions: r.instructions, questions: r.questions.length ? r.questions : [newQuestion()] });
       setMeta({ latestVersion: r.latestVersion, allowPartners: r.allowPartners });
+      if (r.play) setPlayState({ style: r.play.style, wrong: r.play.wrong, pass: r.play.passMarkPercent == null ? '' : String(r.play.passMarkPercent) });
     }).catch((e) => setMsg({ kind: 'bad', text: e.message })).finally(() => setLoading(false));
   }, [id]);
 
@@ -44,7 +50,7 @@ export default function QuizEditor() {
   const save = async (): Promise<string | null> => {
     setBusy(true); setMsg(null);
     try {
-      const body = { ...draft, title: draft.title.trim() || 'Untitled quest' };
+      const body = { ...draft, title: draft.title.trim() || 'Untitled quest', play: { style: play.style, wrong: play.wrong, passMarkPercent: play.pass === '' ? null : Number(play.pass) } };
       const r = quizId.current ? await api('PUT', `/quizzes/${quizId.current}`, { body }) : await api('POST', '/quizzes', { body });
       quizId.current = r.id; setSavedId(r.id); setDirty(false); setMeta({ latestVersion: r.latestVersion, allowPartners: r.allowPartners });
       void qc.invalidateQueries({ queryKey: ['quizzes'] });
@@ -98,10 +104,23 @@ export default function QuizEditor() {
         title={id ? 'Edit quest' : 'Create quest'}
         sub={meta?.latestVersion ? `Published v${meta.latestVersion}${dirty ? ' · you have unpublished changes' : ''}` : 'Draft: nobody can see it until you publish.'}
       />
-      <Stepper steps={['Basics', 'Questions', 'Review and publish']} current={step} onGo={go} />
+      <Stepper steps={['Scoring', 'Details', 'Questions', 'Review and publish']} current={step} onGo={go} />
       {msg && <Notice kind={msg.kind}>{msg.text}{msg.list && <ul className="mt-2 list-disc pl-5">{msg.list.map((p) => <li key={p}>{p}</li>)}</ul>}</Notice>}
 
       {step === 0 && (
+        <section className="card space-y-5" aria-label="Scoring">
+          <div>
+            <h2>First, choose how this quest is played</h2>
+            <p className="hint mt-1">This sets the style players will see. You can change it later, even when you share the quest.</p>
+          </div>
+          <ScoringChoice style={play.style} wrong={play.wrong} onStyle={(style) => setPlay({ style })} onWrong={(wrong) => setPlay({ wrong })} />
+          <Field label="Pass mark (% of marks, optional)" htmlFor="pass" hint="Leave empty for no pass or fail. It is based on marks only, never on points or steps.">
+            <input id="pass" type="number" min={0} max={100} className="field sm:max-w-48" value={play.pass} onChange={(e) => setPlay({ pass: e.target.value })} placeholder="e.g. 50" />
+          </Field>
+        </section>
+      )}
+
+      {step === 1 && (
         <>
           <AiAssistant onResult={applyAi} />
           <section className="card space-y-4" aria-label="Quest details">
@@ -112,7 +131,7 @@ export default function QuizEditor() {
         </>
       )}
 
-      {step === 1 && (
+      {step === 2 && (
         <section className="space-y-4" aria-label="Questions">
           <div className="flex flex-wrap items-baseline justify-between gap-2"><h2>Questions ({draft.questions.length})</h2><p className="hint">Total marks: {total}</p></div>
           <nav aria-label="Jump to a question" className="flex flex-wrap gap-2">
@@ -124,16 +143,30 @@ export default function QuizEditor() {
           </nav>
 
           <fieldset key={q.id} className="card space-y-4">
-            <legend className="px-1 text-base font-extrabold">Question {cur + 1} of {draft.questions.length}</legend>
+            <legend className="sr-only">Question {cur + 1} of {draft.questions.length}</legend>
+            <p aria-hidden className="chip">Question {cur + 1} of {draft.questions.length}</p>
             <Field label="Question" htmlFor={`q-${q.id}`}><textarea id={`q-${q.id}`} className="field min-h-20" value={q.text} onChange={(e) => setQ(cur, (x) => { x.text = e.target.value; })} maxLength={1000} /></Field>
+            <QuestionMedia
+              text={q.text} image={q.image ?? null}
+              onImage={(image) => setQ(cur, (x) => { x.image = image; })}
+              onInsert={(tex) => {
+                const el = document.getElementById(`q-${q.id}`) as HTMLTextAreaElement | null;
+                const a = el?.selectionStart ?? q.text.length, b = el?.selectionEnd ?? a;
+                setQ(cur, (x) => { x.text = x.text.slice(0, a) + tex + x.text.slice(b); });
+                requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(a + tex.length, a + tex.length); });
+              }}
+            />
             <div>
               <p className="label">Answer options. Tick the correct one.</p>
               <div className="space-y-2">
                 {q.options.map((o, j) => (
-                  <div key={o.id} className="flex items-center gap-2">
+                  <div key={o.id}>
+                  <div className="flex items-center gap-2">
                     <input type="radio" className="h-6 w-6 shrink-0 accent-[#12b886]" name={`correct-${q.id}`} checked={q.correctId === o.id} onChange={() => setQ(cur, (x) => { x.correctId = o.id; })} aria-label={`Option ${j + 1} is correct`} />
                     <input className="field" value={o.text} placeholder={`Option ${j + 1}`} aria-label={`Option ${j + 1} text`} maxLength={300} onChange={(e) => setQ(cur, (x) => { x.options[j]!.text = e.target.value; })} />
                     <button type="button" className="btn btn-secondary shrink-0 !px-3" disabled={q.options.length <= limits.minOptions} onClick={() => setQ(cur, (x) => { x.options.splice(j, 1); if (x.correctId === o.id) x.correctId = x.options[0]!.id; })} aria-label={`Remove option ${j + 1}`}>✕</button>
+                  </div>
+                  {hasMath(o.text) && <p className="hint ml-8 mt-1">Shows as: <span className="font-semibold text-ink"><Rich text={o.text} inline /></span></p>}
                   </div>
                 ))}
               </div>
@@ -169,17 +202,18 @@ export default function QuizEditor() {
         </section>
       )}
 
-      {step === 2 && (
+      {step === 3 && (
         <section className="space-y-4" aria-label="Review and publish">
           <div className="card space-y-3">
             <h2>Check before you publish</h2>
             <ul className="space-y-1">
               <li><strong>{draft.title.trim() || 'Untitled quest'}</strong>{draft.subject && <span className="hint"> · {draft.subject}</span>}</li>
               <li>{draft.questions.length} question{draft.questions.length === 1 ? '' : 's'} · {total} marks in total</li>
+              <li>Scored by <strong>{play.style === 'points' ? 'Points' : `Steps (wrong answer: ${play.wrong === 'down' ? 'move down' : 'stay'})`}</strong>{play.pass !== '' && ` · pass mark ${play.pass}%`} <button type="button" className="btn-quiet min-h-0! text-sm" onClick={() => go(0)}>Change</button></li>
             </ul>
             {problems.length === 0
               ? <Notice kind="ok">Everything looks ready.</Notice>
-              : <Notice kind="warn">A few things to fix first:<ul className="mt-2 list-disc pl-5">{problems.map((p) => <li key={p}>{p}</li>)}</ul><button type="button" className="btn-quiet mt-1" onClick={() => go(1)}>Go back to the questions</button></Notice>}
+              : <Notice kind="warn">A few things to fix first:<ul className="mt-2 list-disc pl-5">{problems.map((p) => <li key={p}>{p}</li>)}</ul><button type="button" className="btn-quiet mt-1" onClick={() => go(2)}>Go back to the questions</button></Notice>}
             <p className="hint">Publishing locks in this version so learners never see half-finished edits. You can edit and publish again later.</p>
           </div>
           {published && (
@@ -195,11 +229,11 @@ export default function QuizEditor() {
       <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center gap-2 border-t border-line bg-paper px-4 py-3 safe-bottom md:-mx-8 md:px-8">
         {step > 0 && <button className="btn btn-secondary" onClick={() => go(step - 1)}>Back</button>}
         <button className="btn btn-secondary" onClick={save} disabled={busy}>Save draft</button>
-        {step === 2 && savedId && <Link className="btn btn-secondary" to={`/quizzes/${savedId}/preview`} onClick={(e) => { if (dirty) { e.preventDefault(); void save().then((ok) => { if (ok) nav(`/quizzes/${ok}/preview`); }); } }}>Preview as player</Link>}
+        {step === 3 && savedId && <Link className="btn btn-secondary" to={`/quizzes/${savedId}/preview`} onClick={(e) => { if (dirty) { e.preventDefault(); void save().then((ok) => { if (ok) nav(`/quizzes/${ok}/preview`); }); } }}>Preview as player</Link>}
         <span className="flex-1" />
         {dirty && <span className="hint">Unsaved changes</span>}
-        {step < 2 && <button className="btn btn-primary" onClick={() => go(step + 1)}>{step === 0 ? 'Next: questions' : 'Next: review'}</button>}
-        {step === 2 && <button className="btn btn-primary" onClick={publish} disabled={busy}>Publish</button>}
+        {step < 3 && <button className="btn btn-primary" onClick={() => go(step + 1)}>{['Next: details', 'Next: questions', 'Next: review'][step]}</button>}
+        {step === 3 && <button className="btn btn-primary" onClick={publish} disabled={busy}>Publish</button>}
       </div>
     </div>
   );

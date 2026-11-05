@@ -5,12 +5,13 @@ import type { Db, Queryable } from './db/db';
 import { HttpError, many, one, sha256 } from './db/util';
 import type { Env } from './env';
 import type { QuizService, StoredQuestion } from './quizzes';
+import { imageView } from './images';
 
 export const isoOrNull = (d: Date | string | null | undefined) => (d ? new Date(d).toISOString() : null);
 
 /** Learner-facing question: no answer key, no explanation, per-attempt option order. */
-export function publicQuestion(q: StoredQuestion, attemptId: string) {
-  return { id: q.id, text: q.text, marks: q.marks, points: q.points, options: optionOrder(q.options, attemptId, q.id) };
+export function publicQuestion(q: StoredQuestion, attemptId: string, env: Env) {
+  return { id: q.id, text: q.text, image: imageView(env, q.image), marks: q.marks, points: q.points, options: optionOrder(q.options, attemptId, q.id) };
 }
 export const graded = (qs: StoredQuestion[]): GradedQuestion[] => qs.map((q) => ({ id: q.id, correctId: q.correctId, marks: q.marks, points: q.points }));
 
@@ -118,7 +119,7 @@ export class AttemptService {
     if (a.status === 'in_progress') {
       const locked: string[] = a.locked;
       const judged = this.judgeLocked(ver.questions, a, s);
-      return { ...base, questions: ver.questions.map((q) => publicQuestion(q, a.id)), answers: a.answers, locked, judged };
+      return { ...base, questions: ver.questions.map((q) => publicQuestion(q, a.id, this.env)), answers: a.answers, locked, judged };
     }
     return { ...base, result: this.visibleResult(a, ver.questions, act) };
   }
@@ -156,7 +157,7 @@ export class AttemptService {
       stepPosition: a.style === 'steps' ? a.step_position : null, stepMax: qs.length,
       review: s.showAnswers === false ? null : qs.map((q) => {
         const o = outcomes.find((x) => x.id === q.id);
-        return { id: q.id, text: q.text, options: q.options, chosen: o?.chosen ?? null, correctId: q.correctId, correct: !!o?.correct, marks: q.marks, earned: o?.marks ?? 0, explanation: q.explanation, stepTo: o?.stepTo };
+        return { id: q.id, text: q.text, image: imageView(this.env, q.image), options: q.options, chosen: o?.chosen ?? null, correctId: q.correctId, correct: !!o?.correct, marks: q.marks, earned: o?.marks ?? 0, explanation: q.explanation, stepTo: o?.stepTo };
       }),
     };
   }

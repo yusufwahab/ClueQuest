@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import type { Standing } from '../lib/useRoom';
-import { StepTrack } from './ui';
 
 export function useCountdown(deadline: number | null, now: () => number) {
   const [left, setLeft] = useState(0);
@@ -25,7 +24,7 @@ export function Standings({ rows, style, total, meId }: { rows: Standing[]; styl
           {rows.map((r) => (
             <tr key={r.id} className={r.id === meId ? 'bg-primary-soft font-semibold' : ''}>
               <td>{r.rank}</td>
-              <td className="min-w-32">{r.nickname}{r.id === meId ? ' (you)' : ''}{style === 'steps' && <div className="mt-1 max-w-60"><StepTrack position={r.step} max={total} label="Step" /></div>}</td>
+              <td className="min-w-32">{r.nickname}{r.id === meId ? ' (you)' : ''}</td>
               <td>{style === 'points' ? r.points : `${r.step} / ${total}`}</td>
               <td>{r.marks}</td>
             </tr>

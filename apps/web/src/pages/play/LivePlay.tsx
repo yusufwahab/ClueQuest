@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useRoom } from '../../lib/useRoom';
 import { Standings, Timer, useCountdown } from '../../components/LiveParts';
-import { Loading, Notice, OptionBadge, StepTrack } from '../../components/ui';
+import { Loading, Notice, OptionBadge } from '../../components/ui';
+import { StepRace, StepScene } from '../../components/StepScene';
+import { AnswerPop, Confetti, useAnswerPop } from '../../components/Feedback';
+import { QuestionImage, Rich } from '../../components/Rich';
 import { roomKey } from './JoinRoom';
 
 export default function LivePlay() {
@@ -13,6 +16,22 @@ export default function LivePlay() {
   const [pending, setPending] = useState<string | null>(null);
   const [err, setErr] = useState('');
   useEffect(() => { setPending(null); }, [s?.qIndex]);
+
+  // When the host locks a question, tell this player how they did. Only on the live change, so a refresh does not replay old news.
+  const [pop, showPop] = useAnswerPop();
+  const lastPhase = useRef<string | null>(null);
+  const streak = useRef(0);
+  useEffect(() => {
+    if (!s) return;
+    const justLocked = lastPhase.current === 'question' && s.phase === 'locked';
+    lastPhase.current = s.phase;
+    if (!justLocked || !s.question) return;
+    if (!s.myAnswer) { streak.current = 0; showPop('timeout', 'No answer in time'); return; }
+    const right = s.myAnswer === s.question.correctId;
+    streak.current = right ? streak.current + 1 : 0;
+    showPop(right ? 'correct' : 'wrong', right ? (s.style === 'points' ? `+${s.question.points} points` : 'One step up') : s.style === 'steps' && s.steps.wrong === 'down' ? 'One step down' : undefined, streak.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s?.phase, s?.qIndex]);
 
   if (!token || conn === 'rejected') return <main className="container-page max-w-md py-10 space-y-3"><Notice kind="warn">You have not joined this game on this device.</Notice><Link className="btn btn-primary" to={`/join/${code}`}>Join the game</Link></main>;
   if (!s) return <Loading what="Joining" />;
@@ -28,10 +47,11 @@ export default function LivePlay() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-xl flex-col px-4 pb-6">
-      <header className="sticky top-0 z-10 -mx-4 border-b border-line bg-paper px-4 py-3">
+      <AnswerPop event={pop} />
+      <header className="sticky top-0 z-10 -mx-4 border-b border-line bg-surface/90 px-4 py-3 shadow-sm backdrop-blur">
         <div className="flex items-center justify-between gap-3"><p className="truncate font-semibold">{s.title}</p>
           <p className="text-sm text-muted">{conn === 'online' ? `Room ${s.code}` : 'Reconnecting…'}</p></div>
-        {me && s.phase !== 'lobby' && (s.style === 'steps' ? <div className="mt-2"><StepTrack position={me.step} max={s.total} /></div> : <p className="mt-1 font-semibold">Points {me.points} · Marks {me.marks}</p>)}
+        {me && s.phase !== 'lobby' && (s.style === 'steps' ? <div className="mt-2"><StepRace racers={s.board} max={s.total} meId={me.id} /></div> : <p className="mt-1 font-semibold">Points {me.points} · Marks {me.marks}</p>)}
       </header>
       {conn !== 'online' && <div className="mt-3"><Notice kind="warn">Connection lost. Your answers are safe; reconnecting automatically.</Notice></div>}
       {err && <div className="mt-3"><Notice kind="bad">{err}</Notice></div>}
@@ -43,18 +63,20 @@ export default function LivePlay() {
           <>
             <p className="hint">Question {s.qIndex + 1} of {s.total}</p>
             {s.phase === 'question' && <Timer left={left} total={s.secondsPerQuestion} />}
-            <h1 className="text-2xl">{s.question.text}</h1>
+            <h1 className="text-2xl"><Rich text={s.question.text} /></h1>
+            <QuestionImage image={s.question.image} />
             <div role="radiogroup" aria-label="Answer options" className="space-y-2">
               {s.question.options.map((o, oi) => {
                 const isChosen = chosen === o.id; const locked = s.phase === 'locked';
                 const tone = locked && o.id === s.question!.correctId ? 'border-accent bg-accent-soft' : locked && isChosen ? 'border-danger bg-danger-soft' : isChosen ? 'border-primary bg-primary-soft' : 'border-[#cfc8f7] bg-surface';
-                return <button key={o.id} role="radio" aria-checked={isChosen} disabled={!!chosen || locked} onClick={() => answer(o.id)} className={`opt ${tone}`}><OptionBadge index={oi} /><span>{o.text}{locked && o.id === s.question!.correctId ? ' — correct' : locked && isChosen ? ' — your answer' : ''}</span></button>;
+                return <button key={o.id} role="radio" aria-checked={isChosen} disabled={!!chosen || locked} onClick={() => answer(o.id)} className={`opt ${tone}`}><OptionBadge index={oi} /><span><Rich text={o.text} inline />{locked && o.id === s.question!.correctId ? ' — correct' : locked && isChosen ? ' — your answer' : ''}</span></button>;
               })}
             </div>
             {s.phase === 'question' && (chosen ? <Notice kind="ok">Answer locked in. Waiting for the others.</Notice> : <p className="hint">Tap an answer. It locks immediately.</p>)}
             {s.phase === 'locked' && (
               <>
-                <Notice kind={s.myAnswer === s.question.correctId ? 'ok' : 'warn'}>{s.myAnswer === s.question.correctId ? 'Correct.' : s.myAnswer ? 'Not quite.' : 'No answer in time.'} {s.question.explanation}</Notice>
+                <Notice kind={s.myAnswer === s.question.correctId ? 'ok' : 'warn'}>{s.myAnswer === s.question.correctId ? 'Correct.' : s.myAnswer ? 'Not quite.' : 'No answer in time.'} <Rich text={s.question.explanation ?? ''} /></Notice>
+                {s.style === 'steps' && <StepScene decorative variant="banner" position={me?.step ?? 0} max={s.total} others={s.board.filter((b) => b.id !== me?.id)} />}
                 <h2>Standings</h2><Standings rows={s.standings} style={s.style} total={s.total} meId={me?.id} />
                 <p className="hint">Waiting for the host to continue.</p>
               </>
@@ -65,7 +87,13 @@ export default function LivePlay() {
         {s.phase === 'finished' && (
           <>
             <h1>Final results</h1>
-            {me && <div className="card"><p className="text-xl font-bold">You finished #{s.finalStandings?.find((r) => r.id === me.id)?.rank ?? me.rank}</p><p>{s.style === 'points' ? `${me.points} points` : `Step ${me.step} of ${s.total}`} · {me.marks} marks</p></div>}
+            {me && (
+              <div className="hero-bg relative overflow-hidden rounded-3xl p-6 text-center text-white shadow-[0_20px_40px_-24px_rgba(58,31,176,0.9)]">
+                <Confetti n={18} spread={110} />
+                <p className="relative font-display text-3xl font-bold">You finished #{s.finalStandings?.find((r) => r.id === me.id)?.rank ?? me.rank}</p>
+                <p className="relative mt-1 text-lg font-semibold text-white/90">{s.style === 'points' ? `${me.points} points` : `Step ${me.step} of ${s.total}`} · {me.marks} marks</p>
+              </div>
+            )}
             <Standings rows={(s.finalStandings ?? []).slice(0, 10)} style={s.style} total={s.total} meId={me?.id} />
             <Link className="btn btn-secondary" to="/">Home</Link>
           </>

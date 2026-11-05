@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { cloudinaryConfig } from './images';
 
 const bool = z.enum(['true', 'false']).transform((v) => v === 'true');
 const list = z.string().transform((s) => s.split(',').map((x) => x.trim()).filter(Boolean));
@@ -40,6 +41,18 @@ export const envSchema = z.object({
   AI_DAILY_LIMIT: z.coerce.number().int().min(1).max(500).default(20),
   /** Deterministic fake provider for tests and offline demos. */
   AI_MOCK: bool.default(false),
+  /**
+   * Question pictures on Cloudinary. Set CLOUDINARY_URL (the "API Environment variable" from the Cloudinary dashboard, looks like
+   * cloudinary://API_KEY:API_SECRET@CLOUD_NAME) or the three separate values. Neither = pictures are kept in the database (fine for trying things out).
+   */
+  CLOUDINARY_URL: z.string().optional(),
+  CLOUDINARY_CLOUD_NAME: z.string().optional(),
+  CLOUDINARY_API_KEY: z.string().optional(),
+  CLOUDINARY_API_SECRET: z.string().optional(),
+  /** Folder inside the Cloudinary account that holds this app's pictures. */
+  CLOUDINARY_FOLDER: z.string().regex(/^[A-Za-z0-9_-]+$/, 'letters, numbers, _ and - only').default('cluequest'),
+  /** Only changed by tests, which point it at a fake Cloudinary. */
+  CLOUDINARY_API_BASE: z.string().default('https://api.cloudinary.com'),
   /** Seed a local test partner + demo teacher (development only). */
   SEED_DEV_DATA: bool.default(false),
   RATE_LIMIT_DISABLED: bool.default(false),
@@ -60,6 +73,7 @@ export function loadEnv(rawIn: Record<string, string | undefined> = process.env)
     if (env.ALLOWED_ORIGINS.includes('*')) p.push('ALLOWED_ORIGINS must be an explicit allowlist');
   }
   if (env.DB_DRIVER === 'pg' && !env.DATABASE_URL) p.push('DATABASE_URL is required when DB_DRIVER=pg');
+  try { cloudinaryConfig(env); } catch (e) { p.push((e as Error).message); }
   if (env.EMAIL_MODE === 'brevo' && (!env.BREVO_API_KEY || !env.BREVO_SENDER_EMAIL)) p.push('BREVO_API_KEY and BREVO_SENDER_EMAIL are required when EMAIL_MODE=brevo');
   if (p.length) throw new Error(`Invalid environment: ${p.join('; ')}`);
   return env;

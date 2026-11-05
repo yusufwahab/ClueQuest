@@ -21,7 +21,7 @@ export default function QuizUse() {
         title={`Use “${q.data.title}”`}
         sub={`Answer three short questions and you get something to share. Uses published version ${q.data.latestVersion}; later edits will not change it.`}
       />
-      <section className="card"><ActivityForm quizId={id!} submitLabel="Create and get the link" onCreated={(a) => nav(`/activities/${a.id}`)} /></section>
+      <section className="card"><ActivityForm quizId={id!} defaults={q.data.play} submitLabel="Create and get the link" onCreated={(a) => nav(`/activities/${a.id}`)} /></section>
       <p className="hint">
         Using another learning platform? <button type="button" className="font-bold text-primary underline" onClick={() => setPlatforms(true)}>Share this quest with it</button>
         {allow && <span className="chip ml-2">Sharing on</span>}

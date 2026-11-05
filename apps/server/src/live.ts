@@ -4,6 +4,7 @@ import { checkNickname, disambiguate, gradeAttempt, optionOrder, rankStandings, 
 import { limits } from '@cluequest/config';
 import type { Db, Queryable } from './db/db';
 import { HttpError, many, one } from './db/util';
+import { imageView } from './images';
 import type { Env } from './env';
 import { QuizService, type StoredQuestion } from './quizzes';
 import { graded } from './attempts';
@@ -234,7 +235,7 @@ export class LiveService {
       steps: s.steps ?? { wrong: 'stay' }, secondsPerQuestion: s.secondsPerQuestion ?? 30,
       qIndex: room.q_index, total: qs.length, serverNow: Date.now(), deadline: room.deadline ? new Date(room.deadline).getTime() : null,
       question: open && cur ? {
-        id: cur.id, text: cur.text, marks: cur.marks, points: cur.points,
+        id: cur.id, text: cur.text, image: imageView(this.env, cur.image), marks: cur.marks, points: cur.points,
         options: isHost ? cur.options : optionOrder(cur.options, (viewer as any).playerId, cur.id),
         ...(revealed ? { correctId: cur.correctId, explanation: cur.explanation, counts } : {}),
       } : null,
@@ -243,6 +244,8 @@ export class LiveService {
       myAnswer, me: me ? view(me) : null,
       // Standings appear only once a question is closed, never while answers are still coming in.
       standings: room.phase === 'locked' || room.phase === 'finished' ? (isHost ? table : table.slice(0, 10)).map(view) : [],
+      // Everyone's step, for the shared staircase. Scores only count closed questions, so this never reveals answers that are still coming in.
+      board: room.activity.style === 'steps' ? (room.phase === 'lobby' ? players.map((p) => ({ id: p.id, nickname: p.nickname, step: 0 })) : table.map((t) => ({ id: t.id, nickname: t.nickname, step: t.step }))) : [],
       finalStandings: room.phase === 'finished' ? table.map(view) : null,
       role: isHost ? 'host' : 'player',
     };

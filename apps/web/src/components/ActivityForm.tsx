@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ApiError, api } from '../lib/api';
 import { Field, Icon, Notice, Stepper } from './ui';
+import ScoringChoice from './ScoringChoice';
 
 type Mode = 'solo' | 'live' | 'cbt';
 const MODE_TEXT: Record<Mode, { name: string; icon: 'solo' | 'live' | 'exam'; desc: string }> = {
@@ -15,11 +16,11 @@ const toIso = (v: string) => (v ? new Date(v).toISOString() : null);
  * Turns a published quest into something people can take, one decision per screen:
  * 1. how they will take it, 2. how it is scored, 3. the few settings that apply. Participation (mode) and scoring (style) stay independent.
  */
-export default function ActivityForm({ quizId, fixedMode, submitLabel = 'Create', onCreated }: { quizId: string; fixedMode?: Mode; submitLabel?: string; onCreated: (activity: any) => void }) {
+export default function ActivityForm({ quizId, fixedMode, submitLabel = 'Create', defaults, onCreated }: { quizId: string; fixedMode?: Mode; submitLabel?: string; defaults?: { style?: 'points' | 'steps'; wrong?: 'stay' | 'down'; passMarkPercent?: number | null } | null; onCreated: (activity: any) => void }) {
   const [mode, setMode] = useState<Mode>(fixedMode ?? 'solo');
-  const [style, setStyle] = useState<'points' | 'steps'>('points');
-  const [wrong, setWrong] = useState<'stay' | 'down'>('stay');
-  const [pass, setPass] = useState(''); const [instant, setInstant] = useState(false); const [secs, setSecs] = useState(30);
+  const [style, setStyle] = useState<'points' | 'steps'>(defaults?.style ?? 'points');
+  const [wrong, setWrong] = useState<'stay' | 'down'>(defaults?.wrong ?? 'stay');
+  const [pass, setPass] = useState(defaults?.passMarkPercent != null ? String(defaults.passMarkPercent) : ''); const [instant, setInstant] = useState(false); const [secs, setSecs] = useState(30);
   const [opens, setOpens] = useState(''); const [closes, setCloses] = useState(''); const [duration, setDuration] = useState(30);
   const [attempts, setAttempts] = useState(1); const [release, setRelease] = useState<'immediate' | 'after_close' | 'manual'>('immediate'); const [showAnswers, setShowAnswers] = useState(true);
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
@@ -41,7 +42,7 @@ export default function ActivityForm({ quizId, fixedMode, submitLabel = 'Create'
   };
   const submit = (e: React.FormEvent) => { e.preventDefault(); if (last) void create(); else setAt(at + 1); };
 
-  const choice = (on: boolean) => `block cursor-pointer rounded-2xl border-2 p-4 transition has-[:focus-visible]:outline-[3px] has-[:focus-visible]:outline-sky ${on ? 'border-primary bg-primary-soft shadow-[0_4px_0_0_#cfc8f7]' : 'border-line bg-surface hover:border-primary/50'}`;
+  const choice = (on: boolean) => `block cursor-pointer rounded-2xl border-2 p-4 transition has-[:focus-visible]:outline-[3px] has-[:focus-visible]:outline-sky ${on ? 'border-primary bg-primary-soft' : 'border-line bg-surface hover:border-primary/50'}`;
 
   return (
     <form className="space-y-5" onSubmit={submit}>
@@ -65,28 +66,9 @@ export default function ActivityForm({ quizId, fixedMode, submitLabel = 'Create'
       )}
 
       {page === 'Scoring' && (
-        <div className="space-y-4">
-          <fieldset className="space-y-3">
-            <legend className="text-lg font-extrabold">How should it be scored?</legend>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className={choice(style === 'points')}>
-                <input type="radio" className="sr-only" name="style" checked={style === 'points'} onChange={() => setStyle('points')} />
-                <span className="block font-extrabold">Points</span><span className="hint mt-1 block">Each correct answer earns the points you set on that question. Wrong or skipped earns zero.</span>
-              </label>
-              <label className={choice(style === 'steps')}>
-                <input type="radio" className="sr-only" name="style" checked={style === 'steps'} onChange={() => setStyle('steps')} />
-                <span className="block font-extrabold">Steps</span><span className="hint mt-1 block">Everyone starts at step 0 and climbs one step for each correct answer.</span>
-              </label>
-            </div>
-            <p className="hint">Marks (the grade) are always counted separately, whichever you pick.</p>
-          </fieldset>
-          {style === 'steps' && (
-            <Field label="When an answer is wrong or missing" htmlFor="wrong" hint="Nobody goes below step 0.">
-              <select id="wrong" className="field" value={wrong} onChange={(e) => setWrong(e.target.value as 'stay' | 'down')}>
-                <option value="stay">Stay on the same step</option><option value="down">Move down one step</option>
-              </select>
-            </Field>
-          )}
+        <div className="space-y-3">
+          {defaults?.style && <Notice kind="info">Already set to <strong>{defaults.style === 'points' ? 'Points' : 'Steps'}</strong> from when you created the quest. Change it here if this one needs a different style.</Notice>}
+          <ScoringChoice style={style} wrong={wrong} onStyle={setStyle} onWrong={setWrong} />
         </div>
       )}
 

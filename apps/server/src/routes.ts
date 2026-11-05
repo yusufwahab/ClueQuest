@@ -1,9 +1,10 @@
-import { Router, type Request } from 'express';
+import express, { Router, type Request } from 'express';
 import { aiGenerateSchema, answerOneSchema, inviteSchema, joinRoomSchema, loginSchema, registerSchema, saveAnswersSchema, startAttemptSchema } from '@cluequest/contracts';
 import { isValidRoomCode, normaliseRoomCode } from '@cluequest/game-core';
 import type { Ctx } from './ctx';
 import { HttpError, csvSafe, many, one } from './db/util';
 import { isoOrNull } from './attempts';
+import { IMAGE_TYPES, MAX_IMAGE_BYTES } from './images';
 
 const attemptToken = (req: Request) => (typeof req.headers['x-attempt-token'] === 'string' ? req.headers['x-attempt-token'] : undefined);
 const id = (req: Request, k = 'id') => String(req.params[k]);
@@ -20,7 +21,7 @@ const brief = (a: any, extra: Record<string, unknown> = {}) => {
 
 export function routes(ctx: Ctx) {
   const r = Router();
-  const { auth, quizzes, attempts, live, partners, db, limit, ai, env } = ctx;
+  const { auth, quizzes, attempts, live, partners, db, limit, ai, env, images } = ctx;
   const teacher = auth.require();
   const uid = (req: Request) => req.user!.id;
 
@@ -43,6 +44,19 @@ export function routes(ctx: Ctx) {
   r.post('/quizzes/:id/publish', teacher, async (req, res) => res.json(await quizzes.publish(id(req), uid(req))));
   r.post('/quizzes/:id/archive', teacher, async (req, res) => { await quizzes.archive(id(req), uid(req)); res.status(204).end(); });
   r.put('/quizzes/:id/partner-access', teacher, async (req, res) => { await quizzes.setPartnerAccess(id(req), uid(req), !!req.body?.allow); res.status(204).end(); });
+
+  // ---- question images -----------------------------------------------------------------------------------------------
+  // Upload is for hosts. Reading is public by an unguessable id, because learners need to see the pictures in a published quest.
+  r.post('/images', teacher, limit('img', 120, 3_600_000, (req) => req.user!.id), express.raw({ type: [...IMAGE_TYPES], limit: MAX_IMAGE_BYTES }), async (req, res) => {
+    if (!Buffer.isBuffer(req.body)) throw new HttpError(415, 'Use a PNG, JPEG, WebP or GIF picture.', 'bad_image');
+    res.status(201).json(await images.save(uid(req), req.body));
+  });
+  r.get('/images/:id', async (req, res) => {
+    const img = await images.get(id(req));
+    if (!img) throw new HttpError(404, 'Image not found', 'not_found');
+    res.set({ 'content-type': img.mime, 'content-length': String(img.bytes.length), 'cache-control': 'public, max-age=31536000, immutable', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; sandbox" });
+    res.end(img.bytes);
+  });
 
   // ---- AI assistant (hosts only; one request builds a whole draft, so credit use stays small) ----------------------------
   r.get('/ai/status', teacher, (_req, res) => res.json({ enabled: ai.enabled }));

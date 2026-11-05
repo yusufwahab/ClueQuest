@@ -210,6 +210,8 @@ describe('live', () => {
     await ask(host, 'host', { cmd: 'next' });
     const fin = await nextState(ann, (s) => s.phase === 'finished');
     expect(fin.finalStandings.map((r: any) => [r.nickname, r.rank, r.step, r.marks])).toEqual([['Ann', 1, 3, 6], ['Ben', 2, 0, 0]]);
+    // Every player (not only the top 10) sees everyone's step for the shared staircase.
+    expect(fin.board.map((r: any) => [r.nickname, r.step]).sort()).toEqual([['Ann', 3], ['Ben', 0]]);
     const saved = await api(h, 'GET', `/rooms/${room.id}/results`, { token: tk });
     expect(saved.body.results).toHaveLength(2);
     expect(saved.body.results[0]).toMatchObject({ nickname: 'Ann', step: 3, marks: 6 });

@@ -41,6 +41,12 @@ GROQ_API_KEY=...     # https://console.groq.com/keys       (used if Gemini is bu
 
 Neither key set = the assistant explains it is off. `AI_MOCK=true` gives fake offline questions for trying the flow. Each host gets `AI_DAILY_LIMIT` generations a day (default 20). Free-tier limits and model names change; edit `GEMINI_MODEL` / `GROQ_MODEL` if a model is retired.
 
+## Question pictures and maths
+
+Hosts can add a picture to a question and write maths between dollar signs (`$x^2 + 1$`; `$$...$$` for a line of its own). Maths is drawn by KaTeX, which is only downloaded when a page contains maths.
+
+Pictures are shrunk in the browser, uploaded to the server, and stored on **Cloudinary** when `CLOUDINARY_URL` is set (copy it from Cloudinary's dashboard under Settings > API Keys). Learners then load them from Cloudinary's CDN, resized and compressed for their device. Set it on the server (Render) only; the website needs nothing. Without it, pictures are kept in the database, which is fine for development but not recommended for production.
+
 ## Checks
 
 ```bash

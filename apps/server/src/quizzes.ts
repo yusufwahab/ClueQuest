@@ -5,6 +5,7 @@ import { HttpError, many, one, sha256 } from './db/util';
 import type { Env } from './env';
 import type { Mailer } from './email';
 import { invitationEmail } from './email';
+import { imageView } from './images';
 
 export interface StoredQuestion extends Question {}
 export interface VersionRow { quiz_id: string; version: number; title: string; subject: string; instructions: string; questions: StoredQuestion[] }
@@ -13,7 +14,7 @@ const shareCode = () => randomBytes(6).toString('base64url').toLowerCase().repla
 
 /** Normalise a possibly-incomplete draft question so the editor always gets every field. */
 function fillQuestion(q: any): StoredQuestion {
-  return { id: String(q.id), text: q.text ?? '', options: q.options ?? [], correctId: q.correctId ?? '', marks: q.marks ?? 1, points: q.points ?? 100, explanation: q.explanation ?? '' };
+  return { id: String(q.id), text: q.text ?? '', options: q.options ?? [], correctId: q.correctId ?? '', marks: q.marks ?? 1, points: q.points ?? 100, explanation: q.explanation ?? '', image: q.image ?? null };
 }
 
 export class QuizService {
@@ -25,7 +26,7 @@ export class QuizService {
   }
   async create(ownerId: string, input: unknown) {
     const d = draftSchema.parse(input ?? { title: 'Untitled quiz' });
-    const draft = { instructions: d.instructions, questions: d.questions.map(fillQuestion) };
+    const draft = { instructions: d.instructions, play: d.play, questions: d.questions.map(fillQuestion) };
     const r = await one<any>(this.db, 'insert into quizzes(owner_id,title,subject,draft) values ($1,$2,$3,$4) returning id', [ownerId, d.title, d.subject, JSON.stringify(draft)]);
     return this.get(r.id, ownerId);
   }
@@ -37,12 +38,12 @@ export class QuizService {
   async get(id: string, ownerId: string) {
     const q = await this.mustOwn(id, ownerId);
     const versions = await many(this.db, 'select version, published_at from quiz_versions where quiz_id=$1 order by version desc', [id]);
-    return { id: q.id, title: q.title, subject: q.subject, instructions: q.draft.instructions ?? '', questions: q.draft.questions ?? [], status: q.status, latestVersion: q.latest_version, allowPartners: q.allow_partners, versions, updatedAt: q.updated_at };
+    return { id: q.id, title: q.title, subject: q.subject, instructions: q.draft.instructions ?? '', play: q.draft.play ?? null, questions: (q.draft.questions ?? []).map((x: any) => ({ ...x, image: imageView(this.env, x.image) })), status: q.status, latestVersion: q.latest_version, allowPartners: q.allow_partners, versions, updatedAt: q.updated_at };
   }
   async saveDraft(id: string, ownerId: string, input: unknown) {
     await this.mustOwn(id, ownerId);
     const d = draftSchema.parse(input);
-    const draft = { instructions: d.instructions, questions: d.questions.map(fillQuestion) };
+    const draft = { instructions: d.instructions, play: d.play, questions: d.questions.map(fillQuestion) };
     await this.db.query('update quizzes set title=$2, subject=$3, draft=$4, updated_at=now() where id=$1', [id, d.title, d.subject, JSON.stringify(draft)]);
     return this.get(id, ownerId);
   }

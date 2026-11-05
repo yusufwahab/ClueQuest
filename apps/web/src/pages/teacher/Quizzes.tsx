@@ -38,10 +38,10 @@ export default function Quizzes() {
           {list.map((x) => {
             const live = x.latest_version > 0;
             return (
-              <li key={x.id} className="card flex flex-col gap-3">
+              <li key={x.id} className={`card card-link relative flex flex-col gap-3 overflow-hidden pt-7 before:absolute before:inset-x-0 before:top-0 before:h-2 ${live ? 'before:bg-accent' : 'before:bg-sun'}`}>
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className={`chip ${live ? '' : '!bg-warn-soft !text-warn'}`}>{live ? 'Published' : 'Draft'}</span>
+                    <span className={`chip ${live ? 'bg-accent-soft! text-[#0b7a5a]!' : 'bg-warn-soft! text-warn!'}`}>{live ? 'Published' : 'Draft'}</span>
                     {x.subject && <span className="hint">{x.subject}</span>}
                   </div>
                   <h2 className="mt-1 break-words"><Link className="hover:underline" to={`/quizzes/${x.id}`}>{x.title}</Link></h2>

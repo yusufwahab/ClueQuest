@@ -3,6 +3,22 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 const PARTNER = `http://localhost:${process.env.E2E_PARTNER_PORT ?? '4601'}`;
 const TEACHER = { email: 'host@dev.local', password: 'devpassword1' };
 
+import { deflateSync, crc32 } from 'node:zlib';
+
+/** A valid 8x8 PNG, built here so the test does not depend on a hand-typed file. */
+function makePng(): Buffer {
+  const chunk = (type: string, data: Buffer) => {
+    const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+    const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(body));
+    return Buffer.concat([len, body, crc]);
+  };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(8, 0); ihdr.writeUInt32BE(8, 4); ihdr[8] = 8; ihdr[9] = 2; // 8x8, 8-bit RGB
+  const row = Buffer.concat([Buffer.from([0]), Buffer.alloc(8 * 3, 0xc8)]);
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(Buffer.concat(Array(8).fill(row)))), chunk('IEND', Buffer.alloc(0))]);
+}
+const PNG = makePng();
+
 let quizId = '';
 let teacherToken = '';
 
@@ -41,6 +57,10 @@ test.describe.serial('ClueQuest journeys', () => {
     await signIn(page);
     teacherToken = (await page.evaluate(() => localStorage.getItem('cq.teacher')))!;
     await page.getByRole('link', { name: 'Create quest' }).first().click();
+    await expect(page.getByText('First, choose how this quest is played')).toBeVisible();
+    await page.getByText('Climb the staircase').click(); // Steps
+    await page.getByLabel('When an answer is wrong or missing').selectOption('down');
+    await page.getByRole('button', { name: 'Next: details' }).click();
     await page.getByLabel('Title').fill('Algebra basics');
     await page.getByLabel('Subject (optional)').fill('Mathematics');
     await page.getByRole('button', { name: 'Next: questions' }).click();
@@ -66,7 +86,9 @@ test.describe.serial('ClueQuest journeys', () => {
     await page.getByRole('button', { name: 'Publish', exact: true }).click();
     await expect(page.getByText(/Published as version 1/)).toBeVisible();
     const check = await request.get(`/api/quizzes/${quizId}`, { headers: auth() });
-    expect((await check.json()).latestVersion).toBe(1);
+    const saved = await check.json();
+    expect(saved.latestVersion).toBe(1);
+    expect(saved.play).toMatchObject({ style: 'steps', wrong: 'down' }); // the scoring chosen first is kept with the quest
   });
 
   test('the same published quest runs as Points and as Steps, with marks kept separate', async ({ browser, request }) => {
@@ -154,12 +176,17 @@ test.describe.serial('ClueQuest journeys', () => {
     const path = new URL(inv.invitations[0].url).pathname;
     const page = await (await browser.newContext()).newPage();
     await page.goto(path);
-    await expect(page.getByText('Candidate:')).toBeVisible();
+    await expect(page.getByRole('rowheader', { name: 'Candidate' })).toBeVisible();
     await expect(page.getByText('20 minutes')).toBeVisible();
+    await expect(page.locator('.exam')).toBeVisible(); // exams get the plain, calm look
+    await expect(page.locator('.hero-bg')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeDisabled(); // not until the candidate confirms
+    await page.getByLabel('I have read the instructions').check();
     await page.getByRole('button', { name: 'Start', exact: true }).click();
     await expect(page.getByRole('timer')).toBeVisible();
+    await expect(page.locator('.exam')).toBeVisible();
     await page.getByRole('radio', { name: /^Correct answer/ }).click();
-    await expect(page.getByText('· Saved')).toBeVisible();
+    await expect(page.getByText('All answers saved')).toBeVisible();
     await page.reload();
     await expect(page.getByRole('radio', { name: /^Correct answer/ })).toHaveAttribute('aria-checked', 'true');
     await expect(page.getByRole('timer')).toBeVisible();
@@ -220,6 +247,7 @@ test.describe.serial('ClueQuest journeys', () => {
   test('AI assistant: a short form fills the whole draft, which the host reviews and saves', async ({ page }) => {
     await signIn(page);
     await page.goto('/quizzes/new');
+    await page.getByRole('button', { name: 'Next: details' }).click();
     await page.getByRole('button', { name: 'Use AI assistant' }).click();
     await page.getByLabel('What is the quest about?').fill('Photosynthesis');
     await page.getByLabel('How many questions?').fill('4');
@@ -230,6 +258,72 @@ test.describe.serial('ClueQuest journeys', () => {
     await expect(page.getByRole('heading', { name: 'Questions (4)' })).toBeVisible();
     await page.getByRole('button', { name: 'Save draft' }).click();
     await expect(page.getByText('Draft saved.')).toBeVisible();
+  });
+
+  test('autosave: a slow save of an earlier answer can never wipe out the last answer', async ({ browser, request }) => {
+    await ensureQuest(request);
+    const act = await createActivity(request, { mode: 'solo', style: 'points' });
+    const page = await (await browser.newContext()).newPage();
+    // Hold the first save in the air, and let it land only AFTER question 2 has been answered but BEFORE question 2's own save is due (it waits
+    // half a second). That is the exact window the old code got wrong: finishing the first save marked everything as saved, so question 2's
+    // save was skipped and the last answer never reached the server. Releasing the gate by hand makes the timing exact instead of a guess.
+    let saves = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    await page.route('**/api/attempts/me/answers', async (route) => { saves++; if (saves === 1) await gate; await route.continue(); });
+    await page.goto(`/q/${act.shareCode}`);
+    await page.getByRole('button', { name: 'Start quest' }).click();
+    await page.getByRole('radio', { name: /^Correct answer/ }).click(); // question 1
+    await expect.poll(() => saves).toBe(1); // its save is on the way, held back
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await page.getByRole('radio', { name: /^Correct answer/ }).click(); // question 2, while question 1's save is still in flight
+    release(); // question 1's save lands now
+    await page.waitForTimeout(1500); // long enough for question 2's own save to be sent, or wrongly skipped
+    await page.getByRole('button', { name: 'Review and submit' }).click();
+    await page.getByRole('button', { name: 'Submit my answers' }).click();
+    await expect(page.getByText('2 / 2').first()).toBeVisible(); // both answers were saved and marked
+  });
+
+  test('maths and pictures written by the host are shown to students, and money stays plain text', async ({ browser, request }) => {
+    await ensureQuest(request);
+    const up = await request.post('/api/images', { headers: { ...auth(), 'content-type': 'image/png' }, data: PNG });
+    expect(up.status()).toBe(201);
+    const { id: imageId } = await up.json();
+    const questions = [{
+      id: 'm1', text: 'What is $\\frac{1}{2} + \\frac{1}{4}$? Two cups cost $5 and $10 in total.', image: { id: imageId, alt: 'A bar chart of results' },
+      options: [{ id: 'a', text: '$\\frac{3}{4}$' }, { id: 'b', text: 'Not a fraction' }], correctId: 'a',
+    }];
+    const created = await request.post('/api/quizzes', { headers: auth(), data: { title: 'Maths check', subject: '', instructions: '', questions } });
+    const id = (await created.json()).id;
+    expect((await request.post(`/api/quizzes/${id}/publish`, { headers: auth() })).ok()).toBeTruthy();
+    const act = (await (await request.post('/api/activities', { headers: auth(), data: { quizId: id, mode: 'solo', style: 'points' } })).json());
+
+    const page = await (await browser.newContext()).newPage();
+    await page.goto(`/q/${act.shareCode}`);
+    await page.getByRole('button', { name: 'Start quest' }).click();
+    await expect(page.locator('.katex').first()).toBeVisible({ timeout: 15_000 }); // the maths engine loads only when needed
+    expect(await page.locator('.katex').count()).toBeGreaterThanOrEqual(2); // the question and the first option
+    await expect(page.getByText('Two cups cost $5 and $10 in total.')).toBeVisible(); // not mistaken for maths
+    await expect(page.getByRole('img', { name: 'A bar chart of results' })).toBeVisible();
+    const loaded = await page.getByRole('img', { name: 'A bar chart of results' }).evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0);
+    expect(loaded).toBe(true);
+  });
+
+  test('editor: add a picture and maths symbols to a question and see what students will see', async ({ page, request }) => {
+    await ensureQuest(request);
+    await signIn(page);
+    await page.goto(`/quizzes/${quizId}`); // an existing quest opens on its questions
+    await page.getByText('Maths symbols').click();
+    await page.getByRole('button', { name: 'Fraction' }).click();
+    await expect(page.getByText('What students will see')).toBeVisible();
+    await expect(page.locator('.katex').first()).toBeVisible({ timeout: 15_000 });
+    await page.getByLabel('Choose a picture').setInputFiles({ name: 'plot.png', mimeType: 'image/png', buffer: PNG });
+    await page.getByLabel('Describe the picture').fill('A plot of the data');
+    await page.getByRole('button', { name: 'Save draft' }).click();
+    await expect(page.getByText('Draft saved.')).toBeVisible();
+    const q = await (await request.get(`/api/quizzes/${quizId}`, { headers: auth() })).json();
+    expect(q.questions[0].image).toMatchObject({ alt: 'A plot of the data' });
+    expect(q.questions[0].text).toContain('\\frac');
   });
 
   test('@phone the player screen and Steps track fit a phone without sideways scrolling', async ({ browser, request }) => {

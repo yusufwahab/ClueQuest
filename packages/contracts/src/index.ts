@@ -2,6 +2,9 @@ import { z } from 'zod';
 import { limits } from '@cluequest/config';
 
 export const optionSchema = z.object({ id: z.string().min(1).max(40), text: z.string().trim().min(1).max(300) });
+/** A picture shown with the question. The file lives on the server; the question only holds its id and a description for screen readers. */
+// The id is either an id of ours (a UUID) or a Cloudinary public id. Letters, numbers, / _ and - only, so it can never alter the address it is placed in.
+export const questionImageSchema = z.object({ id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9/_-]{0,199}$/, 'Invalid picture'), alt: z.string().trim().max(200).default('') });
 export const questionSchema = z.object({
   id: z.string().min(1).max(60),
   text: z.string().trim().min(1, 'Write the question').max(1000),
@@ -10,14 +13,24 @@ export const questionSchema = z.object({
   marks: z.number().min(0).max(limits.maxMarks).default(1),
   points: z.number().int().min(0).max(limits.maxPoints).default(100),
   explanation: z.string().max(1000).default(''),
+  image: questionImageSchema.nullable().default(null),
 });
 export type Question = z.infer<typeof questionSchema>;
+
+/** How the host wants the quest scored by default. Stored with the draft; each activity can still override it. */
+export const playSchema = z.object({
+  style: z.enum(['points', 'steps']).default('points'),
+  wrong: z.enum(['stay', 'down']).default('stay'),
+  passMarkPercent: z.number().min(0).max(100).nullable().default(null),
+});
+export type PlayDefaults = z.infer<typeof playSchema>;
 
 /** Drafts may be incomplete; publishing runs validatePublishable(). */
 export const draftSchema = z.object({
   title: z.string().trim().min(1, 'Give the quiz a title').max(120),
   subject: z.string().trim().max(60).default(''),
   instructions: z.string().max(2000).default(''),
+  play: playSchema.optional(),
   questions: z.array(questionSchema.partial({ marks: true, points: true, explanation: true })).max(limits.maxQuestions).default([]),
 });
 export type DraftInput = z.input<typeof draftSchema>;

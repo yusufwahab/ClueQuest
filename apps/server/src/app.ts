@@ -13,6 +13,7 @@ import { HttpError } from './db/util';
 import { loadEnv, type Env } from './env';
 import { Mailer } from './email';
 import { AiService } from './ai';
+import { ImageService, cloudinaryConfig } from './images';
 import { QuizService } from './quizzes';
 import { AttemptService } from './attempts';
 import { LiveService } from './live';
@@ -42,7 +43,8 @@ export async function createApp(envOverrides: Record<string, string | undefined>
   const partners = new PartnerService(db, env, quizzes);
   const webhooks = new WebhookWorker(db, env);
   attempts.onSubmitted = (id) => { void webhooks.deliverForAttempt(id).catch(() => undefined); };
-  const ctx: Ctx = { env, db, auth, quizzes, attempts, live, partners, webhooks, mailer, ai: new AiService(env), limit: limiter(counter, env) };
+  const ctx: Ctx = { env, db, auth, quizzes, attempts, live, partners, webhooks, mailer, ai: new AiService(env), images: new ImageService(db, env), limit: limiter(counter, env) };
+  if (env.NODE_ENV !== 'test') { const c = cloudinaryConfig(env); console.log(c ? `[images] question pictures are stored on Cloudinary (cloud "${c.cloud}", folder "${c.folder}")` : '[images] question pictures are stored in the database (set CLOUDINARY_URL to use Cloudinary)'); }
   if (env.SEED_DEV_DATA) await seedDevData(ctx);
 
   const app = express();
@@ -53,7 +55,7 @@ export async function createApp(envOverrides: Record<string, string | undefined>
   const siteHeaders = helmet({
     contentSecurityPolicy: {
       directives: {
-        defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'"], imgSrc: ["'self'", 'data:'], fontSrc: ["'self'", 'data:'],
+        defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'"], imgSrc: ["'self'", 'data:', 'https://res.cloudinary.com'], fontSrc: ["'self'", 'data:'],
         connectSrc: ["'self'", 'ws:', 'wss:'], objectSrc: ["'none'"], baseUri: ["'self'"], formAction: ["'self'"], frameAncestors: ["'none'"],
       },
     },

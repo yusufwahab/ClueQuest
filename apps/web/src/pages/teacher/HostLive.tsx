@@ -12,6 +12,7 @@ export default function HostLive() {
   const [picked, setPicked] = useState('');
   const published = (quizzes.data?.quizzes ?? []).filter((q) => q.latest_version > 0);
   const quizId = picked || (published.length === 1 ? published[0].id : '');
+  const chosen = useQuery({ queryKey: ['quiz', quizId], queryFn: () => api('GET', `/quizzes/${quizId}`), enabled: !!quizId });
   const live = (acts.data?.activities ?? []).filter((a) => a.mode === 'live' && a.status === 'open');
   const open = async (activityId: string) => { const r = await api('POST', `/activities/${activityId}/rooms`); nav(`/host/room/${r.code}`); };
 
@@ -31,7 +32,8 @@ export default function HostLive() {
               {published.map((q) => <option key={q.id} value={q.id}>{q.title}{q.subject ? ` (${q.subject})` : ''} — v{q.latest_version}</option>)}
             </select>
           </div>
-          {quizId && <div className="border-t border-line pt-5"><p className="chip mb-3">Step 2</p><ActivityForm key={quizId} quizId={quizId} fixedMode="live" submitLabel="Open room" onCreated={(a) => open(a.id)} /></div>}
+          {quizId && chosen.isLoading && <Loading />}
+          {quizId && chosen.data && <div className="border-t border-line pt-5"><p className="chip mb-3">Step 2</p><ActivityForm key={quizId} quizId={quizId} defaults={chosen.data.play} fixedMode="live" submitLabel="Open room" onCreated={(a) => open(a.id)} /></div>}
         </section>
       )}
       {live.length > 0 && (

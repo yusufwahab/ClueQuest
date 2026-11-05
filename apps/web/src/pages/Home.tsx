@@ -3,7 +3,9 @@ import { Link, useNavigate } from 'react-router';
 import { brand } from '@cluequest/config';
 import { normaliseRoomCode } from '@cluequest/game-core';
 import { useAuth } from '../lib/auth';
-import { Icon, Logo, StepTrack } from '../components/ui';
+import { Icon, Logo } from '../components/ui';
+import { PointsPreview, StepsPreview } from '../components/FormatPreview';
+
 
 const WAYS = [
   { icon: 'solo', title: 'Practice alone', text: 'Share one link. Learners play on their own phone and see their score straight away.', tone: 'bg-primary text-white' },
@@ -44,16 +46,12 @@ export default function Home() {
               {!user && <Link className="btn btn-sun" to="/sign-in?mode=register">Create a host account</Link>}
               <a className="btn btn-secondary" href="#how">See how it works</a>
             </div>
-            <div className="mt-10 max-w-md rounded-2xl bg-white p-4 text-ink shadow-xl">
-              <StepTrack position={5} max={8} label="Step" />
-              <p className="hint mt-2">Steps: one step up for every right answer. The host decides if a wrong one costs a step.</p>
-            </div>
           </div>
           <form className="card animate-rise text-ink md:justify-self-end md:w-full md:max-w-sm" style={{ animationDelay: '0.15s' }} onSubmit={(e) => { e.preventDefault(); if (clean.length === 6) nav(`/join/${clean}`); }} aria-labelledby="join-h">
             <h2 id="join-h">Join a live game</h2>
             <p className="hint mt-1">Your host shows a 6-digit code. No account needed.</p>
             <label className="label mt-4" htmlFor="code">Room code</label>
-            <input id="code" className="field text-center text-3xl font-extrabold tracking-widest" inputMode="numeric" autoComplete="off" placeholder="000 000" value={code} onChange={(e) => setCode(e.target.value)} maxLength={7} />
+            <input id="code" className="field text-center text-3xl font-extraboldst" inputMode="numeric" autoComplete="off" placeholder="000 000" value={code} onChange={(e) => setCode(e.target.value)} maxLength={7} />
             <button className="btn btn-primary mt-4 w-full" disabled={clean.length !== 6}>Join game</button>
             <p className="hint mt-4">Have a quest link or exam invitation? Open it directly from your host or class.</p>
           </form>
@@ -95,16 +93,21 @@ export default function Home() {
 
         <section className="container-page py-14">
           <h2 className="text-3xl">Points or Steps. You choose.</h2>
-          <div className="mt-8 grid gap-4 md:grid-cols-2">
-            <article className="card">
-              <h3>Points</h3>
+          <p className="mt-2 max-w-2xl text-muted">Same questions, two ways to play. Pick one for each game, and see below what players see.</p>
+          <div className="mt-8 grid gap-5 md:grid-cols-2">
+            <article className="card flex flex-col">
+              <span className="chip self-start">Race for the top score</span>
+              <h3 className="mt-2 text-2xl">Points</h3>
               <p className="mt-1 text-muted">Each question is worth what you set, for example 50 for an easy one and 200 for a hard one. Right answers add up. Wrong or missed answers earn nothing.</p>
-              <p className="mt-4 text-4xl font-extrabold text-primary">1,250 <span className="text-base font-bold text-muted">points</span></p>
+              <div className="mt-5"><PointsPreview animate /></div>
+              <p className="hint mt-auto pt-3">Best for quick rounds, quizzes with hard and easy questions, and a clear winner.</p>
             </article>
-            <article className="card">
-              <h3>Steps</h3>
+            <article className="card flex flex-col">
+              <span className="chip self-start">Climb the staircase</span>
+              <h3 className="mt-2 text-2xl">Steps</h3>
               <p className="mt-1 text-muted">Climb one step for each right answer. If a learner misses, they either stay put or slide down one, as you decide. They never drop below the start.</p>
-              <div className="mt-4"><StepTrack position={3} max={6} /></div>
+              <div className="mt-5"><StepsPreview animate /></div>
+              <p className="hint mt-auto pt-3">Best for whole classes, because everyone can see everyone's step and nobody is left far behind.</p>
             </article>
           </div>
           <p className="mt-6 text-muted">Either way, school marks are tracked separately, so a game result never changes a grade.</p>

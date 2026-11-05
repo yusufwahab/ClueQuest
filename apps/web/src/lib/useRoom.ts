@@ -5,10 +5,11 @@ import { API_BASE } from './api';
 export interface RoomState {
   v: number; code: string; phase: 'lobby' | 'question' | 'locked' | 'finished' | 'cancelled'; title: string; style: 'points' | 'steps';
   steps: { wrong: 'stay' | 'down' }; secondsPerQuestion: number; qIndex: number; total: number; serverNow: number; deadline: number | null;
-  question: null | { id: string; text: string; marks: number; points: number; options: { id: string; text: string }[]; correctId?: string; explanation?: string; counts?: Record<string, number> };
+  question: null | { id: string; text: string; image: { id: string; alt: string; url: string | null } | null; marks: number; points: number; options: { id: string; text: string }[]; correctId?: string; explanation?: string; counts?: Record<string, number> };
   answered: number; playerCount: number; players?: { id: string; nickname: string; answered: boolean }[];
   myAnswer: string | null; me: null | { id: string; nickname: string; rank: number; points: number; step: number; marks: number; correct: number };
   standings: Standing[]; finalStandings: Standing[] | null; role: 'host' | 'player';
+  board: { id: string; nickname: string; step: number }[];
 }
 export interface Standing { id: string; nickname: string; rank: number; points: number; step: number; marks: number; correct: number }
 export type Conn = 'connecting' | 'online' | 'offline' | 'rejected';

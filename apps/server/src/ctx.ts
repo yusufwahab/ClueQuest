@@ -8,9 +8,10 @@ import type { LiveService } from './live';
 import type { PartnerService, WebhookWorker } from './partners';
 import type { Mailer } from './email';
 import type { AiService } from './ai';
+import type { ImageService } from './images';
 
 export interface Ctx {
   env: Env; db: Db; auth: Auth; quizzes: QuizService; attempts: AttemptService; live: LiveService;
-  partners: PartnerService; webhooks: WebhookWorker; mailer: Mailer; ai: AiService;
+  partners: PartnerService; webhooks: WebhookWorker; mailer: Mailer; ai: AiService; images: ImageService;
   limit: (name: string, max: number, windowMs: number, keyFn?: (req: Request) => string) => RequestHandler;
 }
