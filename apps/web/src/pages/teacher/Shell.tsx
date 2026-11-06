@@ -9,7 +9,7 @@ const items = [
   { to: '/dashboard', label: 'Home', short: 'Home', icon: 'home' },
   { to: '/quizzes', label: 'My quests', short: 'Quests', icon: 'grid' },
   { to: '/host', label: 'Host Live Quest', short: 'Live', icon: 'live' },
-  { to: '/exams', label: 'Exams', short: 'Exams', icon: 'exam' },
+  { to: '/exams', label: 'Customize CBT', short: 'CBT', icon: 'exam' },
   { to: '/results', label: 'Results', short: 'Results', icon: 'chart' },
 ] as const;
 

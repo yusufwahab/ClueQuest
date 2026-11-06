@@ -59,7 +59,7 @@ export default function Entry({ kind }: { kind: Kind }) {
               <ul className="mt-1 list-disc space-y-1 pl-5">
                 <li>The timer starts when you press Start and cannot be paused. It keeps running if you refresh or close the page.</li>
                 <li>Your answers are saved automatically. You can change them until you submit.</li>
-                <li>When the time is up, your exam is submitted for you with the answers saved so far.</li>
+                <li>When the time is up, your CBT is submitted for you with the answers saved so far.</li>
               </ul>
             </div>
             {kind === 'solo' && info.status !== 'closed' && (
@@ -71,7 +71,7 @@ export default function Entry({ kind }: { kind: Kind }) {
               </div>
             )}
             {error && <Notice kind="bad">{error.message}</Notice>}
-            {info.status === 'closed' ? <Notice kind="warn">This exam is closed.</Notice> : info.canStart === false ? (
+            {info.status === 'closed' ? <Notice kind="warn">This CBT is closed.</Notice> : info.canStart === false ? (
               <div className="space-y-2"><Notice kind="warn">You have used all your attempts.</Notice>
                 {info.lastAttemptToken && <Link className="btn btn-primary" to={`/attempt/${info.lastAttemptToken}`}>View your result</Link>}
                 {info.returnUrl && <a className="btn btn-secondary ml-2" href={info.returnUrl}>Return to class</a>}</div>
@@ -94,7 +94,7 @@ export default function Entry({ kind }: { kind: Kind }) {
       {error && !info && (
         <div className="card space-y-3">
           <Notice kind="bad">{error.message}</Notice>
-          {error.code === 'needs_identity' && <p className="hint">Ask your host for your personal exam link.</p>}
+          {error.code === 'needs_identity' && <p className="hint">Ask your host for your personal CBT link.</p>}
           {error.code === 'launch_expired' && info?.returnUrl && <a className="btn btn-secondary" href={info.returnUrl}>Return to class</a>}
         </div>
       )}

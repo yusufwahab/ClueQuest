@@ -42,12 +42,12 @@ export function ScheduleStep({ value: s, onChange }: P) {
   const windowMin = s.opens && s.closes ? (new Date(s.closes).getTime() - new Date(s.opens).getTime()) / 60000 : null;
   const summary = [
     s.opens ? `Candidates can start from ${when(s.opens)}.` : 'Candidates can start as soon as they get their invitation.',
-    s.closes ? `Nobody can start after ${when(s.closes)}, and any exam still running is submitted automatically at that time.` : 'There is no closing time.',
+    s.closes ? `Nobody can start after ${when(s.closes)}, and any CBT still running is submitted automatically at that time.` : 'There is no closing time.',
     `Each candidate gets ${s.duration} minute${s.duration === 1 ? '' : 's'}, counted from the moment they press Start.`,
   ];
   return (
     <section className="card space-y-4" aria-label="Schedule">
-      <div><h2>When does the exam run?</h2><p className="hint mt-1">Times are in your time zone ({zone}). Candidates see them in theirs.</p></div>
+      <div><h2>When does the CBT run?</h2><p className="hint mt-1">Times are in your time zone ({zone}). Candidates see them in theirs.</p></div>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Opens" htmlFor="ex-opens" hint="Leave empty to open straight away."><input id="ex-opens" type="datetime-local" className="field" value={s.opens} onChange={(e) => onChange({ opens: e.target.value })} /></Field>
         <Field label="Closes" htmlFor="ex-closes" hint="Leave empty for no closing time."><input id="ex-closes" type="datetime-local" className="field" value={s.closes} onChange={(e) => onChange({ closes: e.target.value })} /></Field>
@@ -67,11 +67,11 @@ export function ScheduleStep({ value: s, onChange }: P) {
 export function RulesStep({ value: s, onChange }: P) {
   return (
     <section className="card space-y-4" aria-label="Rules and results">
-      <div><h2>Rules and results</h2><p className="hint mt-1">Exams are graded by marks. You choose when candidates see their results.</p></div>
+      <div><h2>Rules and results</h2><p className="hint mt-1">CBTs are graded by marks. You choose when candidates see their results.</p></div>
       <fieldset className="space-y-2">
         <legend className="label">Who can take it?</legend>
         <div className="grid gap-3 sm:grid-cols-2">
-          {([['link', 'Anyone with the link', 'You get a link to share or copy. Candidates enter their name and an email or ID before they start. You can also invite people by email.'], ['invited', 'Only people I invite', 'Each candidate gets a personal link by email. Nobody else can open the exam.']] as const).map(([v, name, desc]) => (
+          {([['link', 'Anyone with the link', 'You get a link to share or copy. Candidates enter their name and an email or ID before they start. You can also invite people by email.'], ['invited', 'Only people I invite', 'Each candidate gets a personal link by email. Nobody else can open the CBT.']] as const).map(([v, name, desc]) => (
             <label key={v} className={`block cursor-pointer rounded-2xl border-2 p-4 transition has-[:focus-visible]:outline-[3px] has-[:focus-visible]:outline-sky ${s.access === v ? 'border-primary bg-primary-soft' : 'border-line bg-surface hover:border-primary/50'}`}>
               <input type="radio" className="sr-only" name="access" checked={s.access === v} onChange={() => onChange({ access: v })} />
               <span className="font-display text-lg font-semibold">{name}</span><span className="hint mt-1 block">{desc}</span>
@@ -87,7 +87,7 @@ export function RulesStep({ value: s, onChange }: P) {
       <Field label="When do candidates see their results?" htmlFor="ex-rel">
         <select id="ex-rel" className="field" value={s.release} onChange={(e) => onChange({ release: e.target.value as ExamSettings['release'] })}>
           <option value="manual">When I release them</option>
-          <option value="after_close">After the exam closes</option>
+          <option value="after_close">After the CBT closes</option>
           <option value="immediate">Straight after they submit</option>
         </select>
       </Field>

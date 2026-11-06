@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import { Loading, Notice, PageHead, fmtDate } from '../../components/ui';
 
-const MODE: Record<string, string> = { solo: 'Solo practice', live: 'Live game', cbt: 'CBT exam' };
+const MODE: Record<string, string> = { solo: 'Solo practice', live: 'Live game', cbt: 'CBT' };
 
 export default function Results() {
   const q = useQuery({ queryKey: ['results'], queryFn: () => api<{ activities: any[]; rooms: any[] }>('GET', '/results') });
@@ -14,7 +14,7 @@ export default function Results() {
   return (
     <div className="space-y-8">
       <PageHead title="Results" sub="Everything people have taken, in one place." />
-      <section className="space-y-2"><h2>Solo links, exams and assignments</h2>
+      <section className="space-y-2"><h2>Solo links, CBTs and assignments</h2>
         {acts.length === 0 ? <p className="text-muted">Nothing yet. Create a quest, publish it, then choose “Use”.</p> : (
           <div className="overflow-x-auto rounded-md border-2 border-line/80 bg-surface"><table className="table">
             <thead><tr><th>Activity</th><th>Type</th><th>Style</th><th>Submitted</th><th>In progress</th><th>Created</th></tr></thead>

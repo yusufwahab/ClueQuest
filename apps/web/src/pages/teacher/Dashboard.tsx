@@ -7,7 +7,7 @@ import { examPhase } from '../../lib/examPhase';
 import { ICON_TONES } from '../../lib/tones';
 import { Icon, Loading, Notice, PageHead, Stat, fmtDate } from '../../components/ui';
 
-const MODE: Record<string, string> = { solo: 'Solo link', live: 'Live quest', cbt: 'Exam' };
+const MODE: Record<string, string> = { solo: 'Solo link', live: 'Live quest', cbt: 'CBT' };
 
 function greeting() {
   const h = new Date().getHours();
@@ -17,7 +17,7 @@ function greeting() {
 const START = [
   { to: '/quizzes/new', title: 'Create a quest', text: 'Questions for practice links and live games.', icon: 'plus', tone: '' },
   { to: '/host', title: 'Host a Live Quest', text: 'Run a game with a room code.', icon: 'live', tone: '' },
-  { to: '/exams/new', title: 'Create an exam', text: 'Timed, scheduled, with candidates.', icon: 'exam', tone: '' },
+  { to: '/exams/new', title: 'Create a CBT', text: 'Timed, scheduled, with candidates.', icon: 'exam', tone: '' },
   { to: '/quizzes/new?ai=1', title: 'Draft with AI', text: 'Describe a topic, review the draft.', icon: 'spark', tone: '' },
 ] as const;
 
@@ -31,7 +31,7 @@ export default function Dashboard() {
   const first = (user?.displayName ?? '').trim().split(/\s+/)[0] || 'there';
 
   // The greeting shows straight away; the sections fill in once their data arrives.
-  const head = <PageHead title={`${greeting()}, ${first}`} sub="Here is what is happening across your quests and exams." />;
+  const head = <PageHead title={`${greeting()}, ${first}`} sub="Here is what is happening across your quests and CBTs." />;
   if (quests.isLoading || acts.isLoading || drafts.isLoading || results.isLoading) return <div className="space-y-6">{head}<Loading what="Loading your overview" /></div>;
   const err = quests.error ?? acts.error ?? results.error;
   if (err) return <div className="space-y-6">{head}<Notice kind="bad">{(err as Error).message}</Notice></div>;
@@ -54,8 +54,8 @@ export default function Dashboard() {
   const attention: { key: string; icon: 'live' | 'exam' | 'grid'; text: ReactNode; to: string; cta: string }[] = [];
   for (const r of live) attention.push({ key: `r${r.id}`, icon: 'live', text: <><strong>{r.title}</strong> is running now with {r.players} player{r.players === 1 ? '' : 's'}.</>, to: `/host/room/${r.code}`, cta: 'Open room' });
   for (const { a } of open) attention.push({ key: `o${a.id}`, icon: 'exam', text: <><strong>{a.title}</strong> is open: {a.inProgress} in progress, {a.submitted} submitted.</>, to: `/activities/${a.id}`, cta: 'Manage' });
-  for (const { a } of scheduled.slice(0, 2)) attention.push({ key: `s${a.id}`, icon: 'exam', text: <><strong>{a.title}</strong> opens {fmtDate(a.opensAt)}. {a.access === 'link' ? 'Share the exam link.' : a.invited ? `${a.invited} invited.` : 'No one is invited yet.'}</>, to: `/activities/${a.id}`, cta: a.invited || a.access === 'link' ? 'Manage' : 'Invite candidates' });
-  if (examDrafts.length) attention.push({ key: 'xd', icon: 'exam', text: <>{examDrafts.length} exam{examDrafts.length === 1 ? '' : 's'} started but not scheduled.</>, to: `/exams/draft/${examDrafts[0].id}`, cta: 'Finish setting up' });
+  for (const { a } of scheduled.slice(0, 2)) attention.push({ key: `s${a.id}`, icon: 'exam', text: <><strong>{a.title}</strong> opens {fmtDate(a.opensAt)}. {a.access === 'link' ? 'Share the CBT link.' : a.invited ? `${a.invited} invited.` : 'No one is invited yet.'}</>, to: `/activities/${a.id}`, cta: a.invited || a.access === 'link' ? 'Manage' : 'Invite candidates' });
+  if (examDrafts.length) attention.push({ key: 'xd', icon: 'exam', text: <>{examDrafts.length} CBT{examDrafts.length === 1 ? '' : 's'} started but not scheduled.</>, to: `/exams/draft/${examDrafts[0].id}`, cta: 'Finish setting up' });
   if (questDrafts.length) attention.push({ key: 'qd', icon: 'grid', text: <>{questDrafts.length} quest{questDrafts.length === 1 ? ' is' : 's are'} still a draft.</>, to: `/quizzes/${questDrafts[0].id}`, cta: 'Finish and publish' });
 
   const recent = [...activities.map((a) => ({ id: a.id, title: a.title, kind: a.mode as string, when: a.createdAt as string, to: `/activities/${a.id}`, detail: a.mode === 'cbt' ? `${a.submitted} submitted` : a.mode === 'live' ? `${a.rooms} room${a.rooms === 1 ? '' : 's'}` : `${a.submitted} attempt${a.submitted === 1 ? '' : 's'}` }))]
@@ -65,7 +65,7 @@ export default function Dashboard() {
     { done: qs.length > 0, text: 'Create your first quest', to: '/quizzes/new' },
     { done: published.length > 0, text: 'Publish it', to: qs[0] ? `/quizzes/${qs[0].id}` : '/quizzes/new' },
     { done: activities.some((a) => a.mode !== 'cbt'), text: 'Share it, or host it live', to: published[0] ? `/quizzes/${published[0].id}/use` : '/quizzes' },
-    { done: exams.length > 0, text: 'Set up an exam', to: '/exams/new' },
+    { done: exams.length > 0, text: 'Set up a CBT', to: '/exams/new' },
   ];
   const allDone = steps.every((s) => s.done);
 
@@ -88,9 +88,9 @@ export default function Dashboard() {
 
       <section aria-label="Overview" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Quests" value={qs.length} sub={`${published.length} published · ${questDrafts.length} draft`} />
-        <Stat label="Exams" value={exams.length + examDrafts.length} sub={`${open.length} open · ${scheduled.length} scheduled`} />
+        <Stat label="CBTs" value={exams.length + examDrafts.length} sub={`${open.length} open · ${scheduled.length} scheduled`} />
         <Stat label="Live quests hosted" value={rooms.length} sub={`${players} player${players === 1 ? '' : 's'} in total`} />
-        <Stat label="Submissions" value={submitted} sub="from links and exams" />
+        <Stat label="Submissions" value={submitted} sub="from links and CBTs" />
       </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -113,7 +113,7 @@ export default function Dashboard() {
 
         <section aria-label="Recent activity" className="min-w-0 space-y-3">
           <h2>Recent activity</h2>
-          {recent.length === 0 ? <div className="card !p-4"><p className="text-muted">Nothing yet. Share a quest, host a live quest or invite candidates to an exam and it will show up here.</p></div> : (
+          {recent.length === 0 ? <div className="card !p-4"><p className="text-muted">Nothing yet. Share a quest, host a live quest or invite candidates to a CBT and it will show up here.</p></div> : (
             <ul className="divide-y divide-line overflow-hidden rounded-2xl border-2 border-line/80 bg-surface">
               {recent.map((r) => (
                 <li key={r.id}>

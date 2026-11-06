@@ -35,7 +35,7 @@ export function CopyField({ label, value, hint, big = false, openable = false }:
       <div className="flex flex-col gap-2 sm:flex-row">
         <input id={id} readOnly value={value} onFocus={(e) => e.currentTarget.select()} className={`field min-w-0 flex-1 ${big ? 'text-center text-3xl font-extraboldst' : 'text-sm'}`} />
         <div className="flex gap-2">
-          <CopyButton value={value} what={label.toLowerCase()} className="btn btn-primary flex-1 sm:flex-none" />
+          <CopyButton value={value} what={label.replace(/^(?!CBT)(\w)/, (c) => c.toLowerCase())} className="btn btn-primary flex-1 sm:flex-none" />
           {openable && <a className="btn btn-secondary" href={value} target="_blank" rel="noreferrer">Open</a>}
         </div>
       </div>

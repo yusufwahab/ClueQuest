@@ -5,7 +5,7 @@ import { ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { Backdrop, Field, Icon, Logo, Notice } from '../components/ui';
 
-const PERKS = ['Write a quest once, use it for practice, live games and exams', 'Let the AI assistant draft the questions for you', 'Learners never need an account'];
+const PERKS = ['Write a quest once, use it for practice, live games and CBTs', 'Let the AI assistant draft the questions for you', 'Learners never need an account'];
 
 export default function SignIn() {
   const { user, login, register } = useAuth();

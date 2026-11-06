@@ -21,8 +21,8 @@ const OPTIONS: { to: string; title: string; text: string; points: string[]; cta:
     preview: <StepsPreview compact />,
   },
   {
-    to: '/exams/new', title: 'Set up an exam', icon: 'exam', tone: '', cta: 'Set up an exam',
-    text: 'A formal, timed exam for named candidates, with its own questions and schedule.',
+    to: '/exams/new', title: 'Set up a CBT', icon: 'exam', tone: '', cta: 'Set up a CBT',
+    text: 'A formal, timed CBT for named candidates, with its own questions and schedule.',
     points: ['Opening time, closing time and a timer', 'Personal invitation links by email', 'Results you release when you are ready'],
     preview: <ExamMock />,
   },

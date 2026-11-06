@@ -6,7 +6,7 @@ import { Loading, Notice, PageHead, fmtDate } from '../../components/ui';
 const HOW = [
   { n: 1, title: 'Write it', text: 'Add your questions, or let the AI assistant draft them.' },
   { n: 2, title: 'Publish it', text: 'Check it, then publish. You can still edit later.' },
-  { n: 3, title: 'Share it', text: 'Pick solo link, live game or exam, and copy the link or code.' },
+  { n: 3, title: 'Share it', text: 'Pick solo link, live game or CBT, and copy the link or code.' },
 ];
 
 export default function Quizzes() {

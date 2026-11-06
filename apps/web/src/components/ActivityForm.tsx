@@ -7,7 +7,7 @@ type Mode = 'solo' | 'live' | 'cbt';
 const MODE_TEXT: Record<Mode, { name: string; icon: 'solo' | 'live' | 'exam'; desc: string }> = {
   solo: { name: 'Solo practice', icon: 'solo', desc: 'You get a link. Anyone with it plays on their own, any time. Best for practice and revision.' },
   live: { name: 'Live game', icon: 'live', desc: 'You get a room code. Everyone answers the same question together while you run the game.' },
-  cbt: { name: 'CBT exam', icon: 'exam', desc: 'A timed exam with a window and attempt limit. Each candidate gets a personal link.' },
+  cbt: { name: 'CBT', icon: 'exam', desc: 'A timed CBT with a window and attempt limit. Each candidate gets a personal link.' },
 };
 
 const toIso = (v: string) => (v ? new Date(v).toISOString() : null);
@@ -62,7 +62,7 @@ export default function ActivityForm({ quizId, fixedMode, submitLabel = 'Create'
               </label>
             ))}
           </div>
-          <p className="hint">Setting up a timed exam? Exams have their own place in the menu, with their own questions and schedule.</p>
+          <p className="hint">Setting up a timed CBT? Customize CBT has its own place in the menu, with their own questions and schedule.</p>
         </fieldset>
       )}
 
@@ -86,11 +86,11 @@ export default function ActivityForm({ quizId, fixedMode, submitLabel = 'Create'
           )}
           {mode === 'cbt' && (
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Duration (minutes)" htmlFor="dur" hint="The exam ends at this time even if the page is closed."><input id="dur" type="number" min={1} max={600} className="field" value={duration} onChange={(e) => setDuration(Number(e.target.value))} /></Field>
+              <Field label="Duration (minutes)" htmlFor="dur" hint="The CBT ends at this time even if the page is closed."><input id="dur" type="number" min={1} max={600} className="field" value={duration} onChange={(e) => setDuration(Number(e.target.value))} /></Field>
               <Field label="Attempts allowed" htmlFor="att"><input id="att" type="number" min={1} max={20} className="field" value={attempts} onChange={(e) => setAttempts(Number(e.target.value))} /></Field>
               <Field label="Release results" htmlFor="rel">
                 <select id="rel" className="field" value={release} onChange={(e) => setRelease(e.target.value as typeof release)}>
-                  <option value="immediate">Immediately after submission</option><option value="after_close">After the exam closes</option><option value="manual">When I release them</option>
+                  <option value="immediate">Immediately after submission</option><option value="after_close">After the CBT closes</option><option value="manual">When I release them</option>
                 </select>
               </Field>
               <Field label="Pass mark (% of marks)" htmlFor="pass" hint="Optional. Based on marks only."><input id="pass" type="number" min={0} max={100} className="field" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="e.g. 50" /></Field>

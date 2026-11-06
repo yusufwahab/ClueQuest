@@ -5,7 +5,7 @@ import { api, downloadCsv } from '../../lib/api';
 import { CopyField, Icon, Loading, Modal, Notice, PageHead, fmtDate, pct } from '../../components/ui';
 import InviteCandidates from '../../components/InviteCandidates';
 
-const MODE_NAME: Record<string, string> = { solo: 'Solo practice', live: 'Live game', cbt: 'CBT exam' };
+const MODE_NAME: Record<string, string> = { solo: 'Solo practice', live: 'Live game', cbt: 'CBT' };
 
 export default function ActivityDetail() {
   const { id } = useParams();
@@ -35,7 +35,7 @@ export default function ActivityDetail() {
         actions={<button className="btn btn-secondary" onClick={async () => { await api('POST', `/activities/${id}/${a.status === 'open' ? 'close' : 'reopen'}`); refresh(); }}>{a.status === 'open' ? 'Close' : 'Reopen'}</button>}
       />
 
-      {quizInfo.data?.kind === 'exam' && a.attempts.length > 0 && <Notice kind="info">The questions and rules are locked because candidates have started. You can still invite more candidates, close the exam and release results.</Notice>}
+      {quizInfo.data?.kind === 'exam' && a.attempts.length > 0 && <Notice kind="info">The questions and rules are locked because candidates have started. You can still invite more candidates, close the CBT and release results.</Notice>}
       {a.partnerId && <Notice kind="info">This activity was launched from a connected platform. Results are delivered to it automatically.</Notice>}
 
       {a.mode !== 'live' && (
@@ -49,7 +49,7 @@ export default function ActivityDetail() {
         <section className="card space-y-4">
           <div><h2>Send this link to your learners</h2><p className="hint">They open it, type a name if they like, and play. No account needed.</p></div>
           <CopyField label="Learner link" value={link} openable />
-          <p className="hint">Anyone with the link can play, and it does not say who they are. Use an exam, or a connected platform, when results must belong to named students.</p>
+          <p className="hint">Anyone with the link can play, and it does not say who they are. Use a CBT, or a connected platform, when results must belong to named students.</p>
         </section>
       )}
 
@@ -62,13 +62,13 @@ export default function ActivityDetail() {
 
       {view === 'share' && a.mode === 'cbt' && !a.partnerId && (
         <section className="card space-y-5">
-          <div><h2>{s.access === 'link' ? 'Share your exam' : 'Invite your candidates'}</h2>
+          <div><h2>{s.access === 'link' ? 'Share your CBT' : 'Invite your candidates'}</h2>
             <p className="mt-2 rounded-xl bg-primary-soft/60 p-3 text-sm font-semibold">
               {s.opensAt ? `Opens ${fmtDate(s.opensAt)}` : 'Open now'}{s.closesAt ? ` · closes ${fmtDate(s.closesAt)}` : ' · no closing time'}{s.durationMinutes ? ` · ${s.durationMinutes} minutes each` : ''}{s.attemptLimit ? ` · ${s.attemptLimit} attempt${s.attemptLimit === 1 ? '' : 's'}` : ''}
             </p>
           </div>
           {s.access === 'link' && (
-            <CopyField label="Exam link" value={link} openable hint="Send this to your candidates. When they open it they enter their name and an email or ID number, then start. No account needed." />
+            <CopyField label="CBT link" value={link} openable hint="Send this to your candidates. When they open it they enter their name and an email or ID number, then start. No account needed." />
           )}
           <div className={`space-y-2 ${s.access === 'link' ? 'border-t border-line pt-4' : ''}`}>
             <h3 className="text-lg">{s.access === 'link' ? 'Or invite people by email' : 'Add candidates'}</h3>
@@ -85,7 +85,7 @@ export default function ActivityDetail() {
             </div>
           )}
           {quizInfo.data?.kind === 'exam' && a.attempts.length === 0 && (
-            <div className="border-t border-line pt-4"><Link className="btn btn-secondary" to={`/exams/${a.id}/edit`}>Edit exam</Link><p className="hint mt-1">You can change the questions, schedule and rules until the first candidate starts.</p></div>
+            <div className="border-t border-line pt-4"><Link className="btn btn-secondary" to={`/exams/${a.id}/edit`}>Edit CBT</Link><p className="hint mt-1">You can change the questions, schedule and rules until the first candidate starts.</p></div>
           )}
         </section>
       )}

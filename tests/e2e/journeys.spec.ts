@@ -330,12 +330,12 @@ test.describe.serial('ClueQuest journeys', () => {
   test('exams: a host writes an exam from scratch, schedules it, edits it, and it never appears under quests', async ({ page, request }) => {
     await ensureQuest(request);
     await signIn(page);
-    await page.getByRole('navigation', { name: 'Workspace' }).getByRole('link', { name: 'Exams', exact: true }).click(); // its own place in the menu
-    await expect(page.getByRole('heading', { name: 'Exams', exact: true })).toBeVisible();
-    await page.getByRole('link', { name: '+ Create exam' }).click();
+    await page.getByRole('navigation', { name: 'Workspace' }).getByRole('link', { name: 'Customize CBT', exact: true }).click(); // its own place in the menu
+    await expect(page.getByRole('heading', { name: 'Customize CBT', exact: true })).toBeVisible();
+    await page.getByRole('link', { name: '+ Create CBT' }).click();
 
     // 1 Details
-    await page.getByLabel('Exam title').fill('Chemistry paper');
+    await page.getByLabel('CBT title').fill('Chemistry paper');
     await page.getByRole('button', { name: 'Next: questions' }).click();
     // 2 Questions: the same editor as quests, with no quest needed first
     await page.getByLabel('Question', { exact: true }).fill('What is the symbol for water?');
@@ -353,7 +353,7 @@ test.describe.serial('ClueQuest journeys', () => {
     await page.getByLabel('Attempts allowed').fill('2');
     await page.getByLabel('Pass mark (% of marks)').fill('60');
     await expect(page.getByText('Everything looks ready.')).toBeVisible();
-    await page.getByRole('button', { name: 'Create exam' }).click();
+    await page.getByRole('button', { name: 'Create CBT' }).click();
 
     await expect(page).toHaveURL(/\/activities\//);
     await expect(page.getByRole('button', { name: 'Add candidates' })).toBeVisible();
@@ -361,7 +361,7 @@ test.describe.serial('ClueQuest journeys', () => {
     const activityUrl = page.url();
 
     // edit it while nobody has started
-    await page.getByRole('link', { name: 'Edit exam' }).click();
+    await page.getByRole('link', { name: 'Edit CBT' }).click();
     await page.getByRole('button', { name: 'Next: schedule' }).click();
     await page.getByLabel('Time allowed (minutes)').fill('90');
     await page.getByRole('button', { name: 'Next: rules' }).click();
@@ -373,7 +373,7 @@ test.describe.serial('ClueQuest journeys', () => {
     await page.getByRole('navigation', { name: 'Workspace' }).getByRole('link', { name: 'My quests' }).click();
     await expect(page.getByRole('heading', { name: 'My quests' })).toBeVisible();
     await expect(page.getByText('Chemistry paper')).toHaveCount(0);
-    await page.getByRole('navigation', { name: 'Workspace' }).getByRole('link', { name: 'Exams', exact: true }).click();
+    await page.getByRole('navigation', { name: 'Workspace' }).getByRole('link', { name: 'Customize CBT', exact: true }).click();
     await expect(page.getByText('Chemistry paper')).toBeVisible();
     await expect(page.getByText('90 min').first()).toBeVisible();
   });
@@ -387,9 +387,9 @@ test.describe.serial('ClueQuest journeys', () => {
     await page.goto(`/activities/${exam.id}`);
 
     // a link is there straight away, ready to copy
-    const link = page.getByLabel('Exam link', { exact: true });
+    const link = page.getByLabel('CBT link', { exact: true });
     await expect(link).toHaveValue(new RegExp(`/q/${exam.shareCode}$`));
-    await expect(page.getByRole('button', { name: 'Copy exam link' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Copy CBT link' })).toBeVisible();
 
     // name and email side by side; a half-filled row is explained, not silently dropped
     await page.getByRole('button', { name: 'Add candidates' }).click();
@@ -446,7 +446,7 @@ test.describe.serial('ClueQuest journeys', () => {
     await signIn(page);
     await page.goto(`/activities/${exam.id}`);
     await expect(page.getByRole('heading', { name: 'Invite your candidates' })).toBeVisible();
-    await expect(page.getByLabel('Exam link', { exact: true })).toHaveCount(0);
+    await expect(page.getByLabel('CBT link', { exact: true })).toHaveCount(0);
     const stranger = await (await browser.newContext()).newPage();
     await stranger.goto(`/q/${exam.shareCode}`);
     await expect(stranger.getByText('personal invitation link')).toBeVisible();
@@ -456,7 +456,7 @@ test.describe.serial('ClueQuest journeys', () => {
     await ensureQuest(request);
     await signIn(page);
     await page.goto('/exams/new');
-    await page.getByLabel('Exam title').fill('Late exam');
+    await page.getByLabel('CBT title').fill('Late exam');
     await page.getByRole('button', { name: 'Next: questions' }).click();
     await page.getByLabel('Question', { exact: true }).fill('Question?');
     await page.getByLabel('Option 1 text').fill('Yes');
@@ -465,7 +465,7 @@ test.describe.serial('ClueQuest journeys', () => {
     await page.getByLabel('Closes').fill('2020-01-01T09:00');
     await page.getByRole('button', { name: 'Next: rules' }).click();
     await expect(page.getByText('The closing time has already passed.').first()).toBeVisible();
-    await page.getByRole('button', { name: 'Create exam' }).click();
+    await page.getByRole('button', { name: 'Create CBT' }).click();
     await expect(page.getByText('The closing time has already passed.').first()).toBeVisible();
     await expect(page).not.toHaveURL(/\/activities\//);
   });
@@ -478,13 +478,13 @@ test.describe.serial('ClueQuest journeys', () => {
     const inv = await (await request.post(`/api/activities/${exam.id}/invitations`, { headers: auth(), data: { invitees: [{ name: 'Cy', email: 'cy@school.test' }] } })).json();
     await signIn(page);
     await page.goto(`/activities/${exam.id}`);
-    await expect(page.getByRole('link', { name: 'Edit exam' })).toBeVisible(); // nobody has started yet
+    await expect(page.getByRole('link', { name: 'Edit CBT' })).toBeVisible(); // nobody has started yet
     expect((await request.post(`/api/public/invite/${inv.invitations[0].url.split('/exam/')[1]}/start`)).status()).toBe(201);
     await page.reload();
     await expect(page.getByText('locked because candidates have started')).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Edit exam' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Edit CBT' })).toHaveCount(0);
     await page.goto(`/exams/${exam.id}/edit`);
-    await expect(page.getByRole('heading', { name: 'This exam is locked' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'This CBT is locked' })).toBeVisible();
   });
 
   test('a new host is welcomed, shown what the platform offers, and taken straight into what they pick', async ({ page }) => {
@@ -496,10 +496,10 @@ test.describe.serial('ClueQuest journeys', () => {
 
     await expect(page).toHaveURL(/\/welcome$/);
     await expect(page.getByRole('heading', { name: 'Welcome, Tomi!' })).toBeVisible();
-    for (const name of ['Create a quest', 'Host a Live Quest', 'Set up an exam', 'Try the AI assistant']) await expect(page.getByRole('link', { name })).toBeVisible();
+    for (const name of ['Create a quest', 'Host a Live Quest', 'Set up a CBT', 'Try the AI assistant']) await expect(page.getByRole('link', { name })).toBeVisible();
 
-    await page.getByRole('link', { name: 'Set up an exam' }).click();
-    await expect(page.getByRole('heading', { name: 'Create exam' })).toBeVisible();
+    await page.getByRole('link', { name: 'Set up a CBT' }).click();
+    await expect(page.getByRole('heading', { name: 'Create CBT' })).toBeVisible();
 
     // and the dashboard guides someone with nothing yet
     await page.goto('/dashboard');
@@ -532,7 +532,7 @@ test.describe.serial('ClueQuest journeys', () => {
     await expect(page.getByRole('navigation', { name: 'Workspace' })).toBeHidden(); // the sidebar is for bigger screens
     await expect(bottom.getByRole('link', { name: 'Host Live Quest' })).toBeVisible(); // full name for assistive tech, short label on screen
 
-    for (const [link, heading] of [['Exams', 'Exams'], ['My quests', 'My quests'], ['Results', 'Results'], ['Home', null]] as const) {
+    for (const [link, heading] of [['Customize CBT', 'Customize CBT'], ['My quests', 'My quests'], ['Results', 'Results'], ['Home', null]] as const) {
       await bottom.getByRole('link', { name: link, exact: true }).click();
       if (heading) await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
       await page.waitForTimeout(400);
