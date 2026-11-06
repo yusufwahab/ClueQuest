@@ -6,6 +6,7 @@ import { useAuth } from '../lib/auth';
 import { Icon, Logo } from '../components/ui';
 import { PointsPreview, StepsPreview } from '../components/FormatPreview';
 import { ExamMock } from '../components/ProductMocks';
+import { InstallPrompt } from '../components/InstallPrompt';
 
 const NAV = [['How it works', '#how'], ['Ways to use it', '#ways'], ['What’s inside', '#inside'], ['FAQ', '#faq']] as const;
 
@@ -250,6 +251,7 @@ export default function Home() {
           <span>© {new Date().getFullYear()} {brand.name}</span>
         </div>
       </footer>
+      <InstallPrompt />
     </div>
   );
 }

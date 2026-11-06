@@ -17,3 +17,8 @@ createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </StrictMode>,
 );
+
+// Lets the site be installed on a phone's home screen (the worker caches nothing, see public/sw.js)
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => { void navigator.serviceWorker.register('/sw.js').catch(() => {}); });
+}
