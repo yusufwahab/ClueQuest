@@ -87,16 +87,16 @@ export default function Home() {
 
       {/* A glass pill that floats over the page */}
       <header className="sticky top-3 z-40 px-3 pt-3 sm:px-6">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 rounded-full bg-white/[0.07] py-2 pl-5 pr-2 ring-1 ring-white/15 backdrop-blur-xl">
-          <Link to="/" className="flex items-center gap-2 font-brand text-xl font-extrabold text-white"><Logo light />{brand.name}</Link>
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 rounded-full bg-white/[0.07] py-1.5 pl-3 pr-1.5 ring-1 sm:gap-3 sm:py-2 sm:pl-5 sm:pr-2 ring-white/15 backdrop-blur-xl">
+          <Link to="/" className="flex min-w-0 shrink items-center gap-1.5 font-brand text-lg font-extrabold text-white sm:gap-2 sm:text-xl"><Logo light size={32} />{brand.name}</Link>
           <nav aria-label="Sections" className="hidden items-center gap-7 lg:flex">
             {NAV.map(([label, href]) => <a key={href} href={href} className="font-display text-[0.95rem] font-semibold text-white/75 transition hover:text-white">{label}</a>)}
           </nav>
-          <div className="flex items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-0.5 sm:gap-1.5">
             {user ? <Link className="btn btn-sun min-h-10! rounded-full! px-5! text-base!" to="/dashboard">Dashboard</Link> : (
               <>
-                <Link className="inline-flex min-h-10 items-center whitespace-nowrap rounded-full px-3 font-display text-base font-semibold text-white/90 transition hover:bg-white/10" to="/sign-in">Sign in</Link>
-                <Link className="btn btn-sun min-h-10! whitespace-nowrap rounded-full! px-4! text-base!" to="/sign-in?mode=register">Get started</Link>
+                <Link className="inline-flex min-h-10 items-center whitespace-nowrap rounded-full px-2.5 font-display text-sm font-semibold text-white/90 sm:px-3 sm:text-base transition hover:bg-white/10" to="/sign-in">Sign in</Link>
+                <Link className="btn btn-sun min-h-10! whitespace-nowrap rounded-full! px-3.5! text-sm! sm:px-4! sm:text-base!" to="/sign-in?mode=register">Get started</Link>
               </>
             )}
           </div>
