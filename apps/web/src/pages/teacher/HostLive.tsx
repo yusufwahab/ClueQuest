@@ -19,7 +19,7 @@ export default function HostLive() {
   if (quizzes.isLoading) return <Loading />;
   return (
     <div className="space-y-6">
-      <PageHead title="Host live game" sub="Pick a quest, choose the scoring, and you get a room code for everyone to join." />
+      <PageHead title="Host Live Quest" sub="Pick a quest, choose the scoring, and you get a room code for everyone to join." />
       {published.length === 0 ? (
         <Notice kind="info">You need a published quest first. <Link className="font-semibold underline" to="/quizzes/new">Create one</Link>.</Notice>
       ) : (

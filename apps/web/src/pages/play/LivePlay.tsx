@@ -90,7 +90,7 @@ export default function LivePlay() {
             {me && (
               <div className="hero-bg relative overflow-hidden rounded-3xl p-6 text-center text-white shadow-[0_20px_40px_-24px_rgba(58,31,176,0.9)]">
                 <Confetti n={18} spread={110} />
-                <p className="relative font-display text-3xl font-bold">You finished #{s.finalStandings?.find((r) => r.id === me.id)?.rank ?? me.rank}</p>
+                <p className="relative font-brand text-3xl font-bold">You finished #{s.finalStandings?.find((r) => r.id === me.id)?.rank ?? me.rank}</p>
                 <p className="relative mt-1 text-lg font-semibold text-white/90">{s.style === 'points' ? `${me.points} points` : `Step ${me.step} of ${s.total}`} · {me.marks} marks</p>
               </div>
             )}

@@ -1,5 +1,5 @@
 @import '@fontsource-variable/plus-jakarta-sans/wght.css';
-@import '@fontsource-variable/lexend/wght.css';
+@import '@fontsource-variable/bricolage-grotesque/wght.css';
 @import 'tailwindcss';
 
 /* ClueQuest identity: bright, playful, game-like. Violet base with coral, sun, sky and mint accents. Mirrors packages/config themeTokens. */
@@ -23,7 +23,8 @@
   --color-line: #dcd8f5;
   --color-sidebar: #171347;
   --font-sans: 'Plus Jakarta Sans Variable', system-ui, 'Segoe UI', Roboto, sans-serif;
-  --font-display: 'Lexend Variable', 'Plus Jakarta Sans Variable', system-ui, sans-serif;
+  --font-display: 'Plus Jakarta Sans Variable', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-brand: 'Bricolage Grotesque Variable', 'Plus Jakarta Sans Variable', system-ui, sans-serif;
   --animate-pop: pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
   --animate-float: float 5s ease-in-out infinite;
   --animate-rise: rise 0.5s ease-out both;
@@ -50,10 +51,11 @@
       var(--color-paper);
     background-attachment: fixed;
   }
-  h1, h2, h3, legend, .font-display { font-family: var(--font-display); }
-  h1 { font-size: 1.85rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
-  h2 { font-size: 1.3rem; font-weight: 650; letter-spacing: -0.01em; line-height: 1.25; }
-  h3 { font-size: 1.1rem; font-weight: 600; }
+  h1, h2, h3, .font-brand { font-family: var(--font-brand); }
+  legend, .font-display { font-family: var(--font-display); }
+  h1 { font-size: 1.85rem; font-weight: 800; letter-spacing: -0.025em; line-height: 1.12; }
+  h2 { font-size: 1.3rem; font-weight: 750; letter-spacing: -0.015em; line-height: 1.22; }
+  h3 { font-size: 1.1rem; font-weight: 700; }
   :focus-visible { outline: 3px solid var(--color-sky); outline-offset: 2px; }
   button, a, input, select, textarea { touch-action: manipulation; }
   ::selection { background: var(--color-sun); color: var(--color-ink); }
@@ -102,7 +104,7 @@
   --color-line: #d3d7de; --color-paper: #f3f4f6; --color-muted: #5a6270; --color-ink: #1b2029;
   --color-warn: #8a5300; --color-warn-soft: #fff4dc; --color-danger: #b42318; --color-danger-soft: #fde8e6;
   --radius-xl: 0.5rem; --radius-2xl: 0.5rem; --radius-3xl: 0.5rem;
-  --font-display: var(--font-sans);
+  --font-display: var(--font-sans); --font-brand: var(--font-sans);
   min-height: 100vh; background: var(--color-paper); color: var(--color-ink);
 }
 .exam .card { box-shadow: none; border-width: 1px; }
@@ -111,6 +113,6 @@
 .exam .table th { background: var(--color-paper); color: var(--color-ink); }
 
 .safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
-.hero-bg { background: linear-gradient(135deg, #3a1fb0 0%, #5b3df5 55%, #7a5cff 100%); }
-.side-bg { background: linear-gradient(180deg, #2f1a9e 0%, #1d1363 55%, #171347 100%); }
+.hero-bg { background: radial-gradient(60rem 28rem at 0% 0%, rgba(91, 61, 245, 0.55), transparent 60%), radial-gradient(40rem 24rem at 100% 100%, rgba(122, 60, 255, 0.4), transparent 60%), #0d0836; }
+.side-bg { background: radial-gradient(24rem 20rem at 0% 0%, rgba(91, 61, 245, 0.5), transparent 65%), linear-gradient(180deg, #140f4d 0%, #0d0836 100%); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .001ms !important; animation-duration: .001ms !important; animation-iteration-count: 1 !important; } }

@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ApiError, api, downloadCsv } from '../../lib/api';
-import { CopyButton, CopyField, Icon, Loading, Modal, Notice, PageHead, fmtDate, pct } from '../../components/ui';
+import { api, downloadCsv } from '../../lib/api';
+import { CopyField, Icon, Loading, Modal, Notice, PageHead, fmtDate, pct } from '../../components/ui';
+import InviteCandidates from '../../components/InviteCandidates';
 
 const MODE_NAME: Record<string, string> = { solo: 'Solo practice', live: 'Live game', cbt: 'CBT exam' };
 
@@ -11,11 +12,9 @@ export default function ActivityDetail() {
   const nav = useNavigate();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['activity', id], queryFn: () => api('GET', `/activities/${id}`), refetchInterval: 8000 });
+  const quizInfo = useQuery({ queryKey: ['quiz', q.data?.quizId], queryFn: () => api('GET', `/quizzes/${q.data.quizId}`), enabled: !!q.data && q.data.mode === 'cbt' });
   const [tab, setTab] = useState<'share' | 'results' | null>(null);
   const [inviting, setInviting] = useState(false);
-  const [invitees, setInvitees] = useState('');
-  const [sent, setSent] = useState<any[]>([]);
-  const [msg, setMsg] = useState('');
   if (q.isLoading) return <Loading />;
   if (q.error) return <Notice kind="bad">{(q.error as Error).message}</Notice>;
   const a = q.data;
@@ -24,13 +23,6 @@ export default function ActivityDetail() {
   const refresh = () => qc.invalidateQueries({ queryKey: ['activity', id] });
   const view = tab ?? (a.mode !== 'live' && a.attempts.length > 0 ? 'results' : 'share');
 
-  const invite = async () => {
-    const list = invitees.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const m = l.match(/^(.*?)[,\s]+([^\s,]+@[^\s,]+)$/); return m ? { name: m[1]!.trim() || m[2]!, email: m[2]! } : null; });
-    if (list.some((x) => !x)) return setMsg('Use one candidate per line: Name, email@example.com');
-    try { const r = await api('POST', `/activities/${id}/invitations`, { body: { invitees: list } }); setSent(r.invitations); setInvitees(''); setMsg(''); refresh(); }
-    catch (e) { setMsg(e instanceof ApiError ? e.message : 'Could not send'); }
-  };
-  const closeInvite = () => { setInviting(false); setSent([]); setMsg(''); };
   const openRoom = async () => { const r = await api('POST', `/activities/${id}/rooms`); nav(`/host/room/${r.code}`); };
 
   const tabCls = (on: boolean) => `min-h-11 border-b-4 px-4 font-extrabold ${on ? 'border-primary text-ink' : 'border-transparent text-muted hover:text-ink'}`;
@@ -43,6 +35,7 @@ export default function ActivityDetail() {
         actions={<button className="btn btn-secondary" onClick={async () => { await api('POST', `/activities/${id}/${a.status === 'open' ? 'close' : 'reopen'}`); refresh(); }}>{a.status === 'open' ? 'Close' : 'Reopen'}</button>}
       />
 
+      {quizInfo.data?.kind === 'exam' && a.attempts.length > 0 && <Notice kind="info">The questions and rules are locked because candidates have started. You can still invite more candidates, close the exam and release results.</Notice>}
       {a.partnerId && <Notice kind="info">This activity was launched from a connected platform. Results are delivered to it automatically.</Notice>}
 
       {a.mode !== 'live' && (
@@ -68,17 +61,31 @@ export default function ActivityDetail() {
       )}
 
       {view === 'share' && a.mode === 'cbt' && !a.partnerId && (
-        <section className="card space-y-4">
-          <div><h2>Invite your candidates</h2><p className="hint">Each candidate gets a personal link, so results belong to them. Add them by name and email.</p></div>
-          <div className="flex flex-wrap gap-2">
-            <button className="btn btn-primary" onClick={() => setInviting(true)}>Add candidates</button>
-            {a.invitations?.length > 0 && <span className="chip self-center">{a.invitations.length} invited</span>}
+        <section className="card space-y-5">
+          <div><h2>{s.access === 'link' ? 'Share your exam' : 'Invite your candidates'}</h2>
+            <p className="mt-2 rounded-xl bg-primary-soft/60 p-3 text-sm font-semibold">
+              {s.opensAt ? `Opens ${fmtDate(s.opensAt)}` : 'Open now'}{s.closesAt ? ` · closes ${fmtDate(s.closesAt)}` : ' · no closing time'}{s.durationMinutes ? ` · ${s.durationMinutes} minutes each` : ''}{s.attemptLimit ? ` · ${s.attemptLimit} attempt${s.attemptLimit === 1 ? '' : 's'}` : ''}
+            </p>
+          </div>
+          {s.access === 'link' && (
+            <CopyField label="Exam link" value={link} openable hint="Send this to your candidates. When they open it they enter their name and an email or ID number, then start. No account needed." />
+          )}
+          <div className={`space-y-2 ${s.access === 'link' ? 'border-t border-line pt-4' : ''}`}>
+            <h3 className="text-lg">{s.access === 'link' ? 'Or invite people by email' : 'Add candidates'}</h3>
+            <p className="hint">Each person gets a personal link, so their result is tied to them. Type names and emails side by side, or upload a CSV.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <button className="btn btn-primary" onClick={() => setInviting(true)}>Add candidates</button>
+              {a.invitations?.length > 0 && <span className="chip">{a.invitations.length} invited</span>}
+            </div>
           </div>
           {s.release === 'manual' && (
             <div className="border-t border-line pt-4">
               <p className="hint mb-2">You chose to release results yourself. Do it when you are ready.</p>
               <button className="btn btn-secondary" onClick={async () => { await api('POST', `/activities/${id}/release`); refresh(); }}>Release all submitted results</button>
             </div>
+          )}
+          {quizInfo.data?.kind === 'exam' && a.attempts.length === 0 && (
+            <div className="border-t border-line pt-4"><Link className="btn btn-secondary" to={`/exams/${a.id}/edit`}>Edit exam</Link><p className="hint mt-1">You can change the questions, schedule and rules until the first candidate starts.</p></div>
           )}
         </section>
       )}
@@ -94,7 +101,7 @@ export default function ActivityDetail() {
               <thead><tr><th>Who</th><th>Status</th><th>Marks</th><th>%</th><th>{a.style === 'points' ? 'Points' : 'Step'}</th><th>Result</th><th>Submitted</th>{s.release === 'manual' && <th>Released</th>}</tr></thead>
               <tbody>{a.attempts.map((t: any) => (
                 <tr key={t.id}>
-                  <td>{t.candidate ?? (t.playerName || t.learnerRef || 'Anonymous')}{t.email && <span className="hint block">{t.email}</span>}</td>
+                  <td>{t.candidate ?? (t.playerName || t.learnerRef || 'Anonymous')}{(t.email || (t.playerName && t.learnerRef)) && <span className="hint block break-all">{t.email ?? t.learnerRef}</span>}</td>
                   <td>{t.status === 'submitted' ? (t.autoSubmitted ? 'Auto-submitted' : 'Submitted') : 'In progress'}</td>
                   <td>{t.marksEarned ?? '—'} / {t.marksPossible ?? '—'}</td><td>{pct(t.percent)}</td>
                   <td>{a.style === 'points' ? t.points ?? '—' : t.stepPosition ?? '—'}</td>
@@ -105,29 +112,8 @@ export default function ActivityDetail() {
       )}
 
       {inviting && (
-        <Modal title={sent.length ? 'Invitations ready' : 'Add candidates'} onClose={closeInvite} wide>
-          {sent.length === 0 ? (
-            <div className="space-y-3">
-              {msg && <Notice kind="bad">{msg}</Notice>}
-              <label className="label" htmlFor="cands">One candidate per line: name, then email</label>
-              <textarea id="cands" className="field min-h-32" placeholder={'Ada Obi, ada@school.org\nBola Ade, bola@school.org'} value={invitees} onChange={(e) => setInvitees(e.target.value)} />
-              <button className="btn btn-primary w-full sm:w-auto" onClick={invite} disabled={!invitees.trim()}>Create invitations</button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <p className="hint">Each link below belongs to one candidate. They are shown only now, so copy them if the emails do not arrive.</p>
-              <ul className="space-y-3">{sent.map((i) => (
-                <li key={i.email} className="rounded-xl border border-line p-3">
-                  <p className="font-bold">{i.name} <span className="hint font-normal">· {i.emailStatus === 'sent' ? 'emailed' : 'link only, not emailed'}</span></p>
-                  <div className="mt-2 flex gap-2"><input readOnly aria-label={`Link for ${i.name}`} value={i.url} onFocus={(e) => e.currentTarget.select()} className="field min-w-0 flex-1 text-sm" /><CopyButton value={i.url} what={`link for ${i.name}`} className="btn btn-primary" /></div>
-                </li>))}
-              </ul>
-              <div className="flex flex-wrap gap-2">
-                <CopyButton value={sent.map((i) => `${i.name}: ${i.url}`).join('\n')} label="Copy all links" what="all links" />
-                <button className="btn btn-primary" onClick={closeInvite}>Done</button>
-              </div>
-            </div>
-          )}
+        <Modal title="Add candidates" onClose={() => setInviting(false)} wide>
+          <InviteCandidates activityId={a.id} onSent={refresh} onDone={() => setInviting(false)} />
         </Modal>
       )}
     </div>

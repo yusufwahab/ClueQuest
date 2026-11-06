@@ -105,13 +105,13 @@ export function ScoreCard({ points, possible, label = 'Points earned', children 
             <circle cx="70" cy="70" r={R} fill="none" stroke="#ffc933" strokeWidth="12" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - (go ? ratio : 0))} style={{ transition: 'stroke-dashoffset 1.1s cubic-bezier(0.22, 1, 0.36, 1)' }} />
           </svg>
           <div>
-            <span className="block font-display text-5xl font-bold leading-none tabular-nums">{shown}</span>
+            <span className="block font-brand text-5xl font-bold leading-none tabular-nums">{shown}</span>
             <span className="mt-1 block text-sm font-bold text-white/85">of {possible}</span>
           </div>
         </div>
         <div className="min-w-0">
           <p className="text-sm font-bold uppercase tracking-widest text-white/80">{label}</p>
-          <h2 className="mt-1 font-display text-3xl font-bold text-white sm:text-4xl">{grade.title}</h2>
+          <h2 className="mt-1 font-brand text-3xl font-bold text-white sm:text-4xl">{grade.title}</h2>
           <p className="mt-1 font-semibold text-white/90">{grade.sub}</p>
           <div className="mt-3 flex justify-center gap-1.5 sm:justify-start" aria-hidden>
             {[0, 1, 2].map((i) => (

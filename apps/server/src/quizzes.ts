@@ -20,14 +20,15 @@ function fillQuestion(q: any): StoredQuestion {
 export class QuizService {
   constructor(private db: Db, private env: Env, private mailer: Mailer) {}
 
-  async list(ownerId: string) {
-    return many(this.db, `select id,title,subject,status,latest_version,allow_partners,updated_at,jsonb_array_length(draft->'questions') as question_count
-      from quizzes where owner_id=$1 and status <> 'archived' order by updated_at desc`, [ownerId]);
+  async list(ownerId: string, kind: 'quest' | 'exam' = 'quest') {
+    return many(this.db, `select id,title,subject,status,latest_version,allow_partners,updated_at,kind,jsonb_array_length(draft->'questions') as question_count,
+        exists(select 1 from activities a where a.quiz_id=quizzes.id and a.mode='cbt') as has_exam
+      from quizzes where owner_id=$1 and kind=$2 and status <> 'archived' order by updated_at desc`, [ownerId, kind]);
   }
-  async create(ownerId: string, input: unknown) {
+  async create(ownerId: string, input: unknown, kind: 'quest' | 'exam' = 'quest') {
     const d = draftSchema.parse(input ?? { title: 'Untitled quiz' });
     const draft = { instructions: d.instructions, play: d.play, questions: d.questions.map(fillQuestion) };
-    const r = await one<any>(this.db, 'insert into quizzes(owner_id,title,subject,draft) values ($1,$2,$3,$4) returning id', [ownerId, d.title, d.subject, JSON.stringify(draft)]);
+    const r = await one<any>(this.db, 'insert into quizzes(owner_id,title,subject,draft,kind) values ($1,$2,$3,$4,$5) returning id', [ownerId, d.title, d.subject, JSON.stringify(draft), kind]);
     return this.get(r.id, ownerId);
   }
   async mustOwn(id: string, ownerId: string) {
@@ -38,7 +39,7 @@ export class QuizService {
   async get(id: string, ownerId: string) {
     const q = await this.mustOwn(id, ownerId);
     const versions = await many(this.db, 'select version, published_at from quiz_versions where quiz_id=$1 order by version desc', [id]);
-    return { id: q.id, title: q.title, subject: q.subject, instructions: q.draft.instructions ?? '', play: q.draft.play ?? null, questions: (q.draft.questions ?? []).map((x: any) => ({ ...x, image: imageView(this.env, x.image) })), status: q.status, latestVersion: q.latest_version, allowPartners: q.allow_partners, versions, updatedAt: q.updated_at };
+    return { id: q.id, kind: q.kind as 'quest' | 'exam', title: q.title, subject: q.subject, instructions: q.draft.instructions ?? '', play: q.draft.play ?? null, questions: (q.draft.questions ?? []).map((x: any) => ({ ...x, image: imageView(this.env, x.image) })), status: q.status, latestVersion: q.latest_version, allowPartners: q.allow_partners, versions, updatedAt: q.updated_at };
   }
   async saveDraft(id: string, ownerId: string, input: unknown) {
     await this.mustOwn(id, ownerId);
@@ -129,9 +130,43 @@ export class QuizService {
     return many(this.db, `select a.id,a.title,a.mode,a.style,a.status,a.share_code as "shareCode",a.quiz_version as "quizVersion",a.created_at as "createdAt",
         (select count(*)::int from attempts t where t.activity_id=a.id and t.status='submitted') as submitted,
         (select count(*)::int from attempts t where t.activity_id=a.id and t.status='in_progress') as "inProgress",
-        (select count(*)::int from rooms r where r.activity_id=a.id) as rooms
+        (select count(*)::int from rooms r where r.activity_id=a.id) as rooms,
+        (select count(*)::int from invitations i where i.activity_id=a.id) as invited,
+        a.settings->>'opensAt' as "opensAt", a.settings->>'closesAt' as "closesAt", (a.settings->>'durationMinutes')::int as "durationMinutes",
+        (a.settings->>'attemptLimit')::int as "attemptLimit", coalesce(a.settings->>'access','invited') as access
       from activities a where a.owner_id=$1 order by a.created_at desc`, [ownerId]);
   }
+  // ---- exams: their own question set, written in the exam flow, locked once a candidate starts --------------------------------------
+
+  private examActivity(quizId: string, raw: unknown) {
+    const a = activitySchema.parse({ ...(raw as object), quizId, mode: 'cbt', style: 'points' });
+    this.assertSettings(a);
+    return a;
+  }
+  /** Publish the exam's questions and open the exam, in one step. The questions must belong to an exam, not a quest. */
+  async createExam(ownerId: string, quizId: string, raw: unknown) {
+    const quiz = await this.mustOwn(quizId, ownerId);
+    if (quiz.kind !== 'exam') throw new HttpError(422, 'These questions belong to a quest, not an exam', 'not_exam');
+    if (await one(this.db, "select 1 from activities where quiz_id=$1 and mode='cbt'", [quizId])) throw new HttpError(409, 'This exam has already been created', 'exists');
+    const a = this.examActivity(quizId, raw);
+    const { version } = await this.publish(quizId, ownerId);
+    const ver = await this.getVersion(quizId, version);
+    return this.insertActivity({ ownerId, quizId, version, mode: 'cbt', style: 'points', title: a.title || ver.title, settings: this.settingsOf(a) });
+  }
+  /** Change an exam's questions and rules. Only until the first candidate starts: after that the paper must not change. */
+  async updateExam(ownerId: string, activityId: string, raw: unknown) {
+    const act = await this.ownActivity(activityId, ownerId);
+    const quiz = await this.mustOwn(act.quiz_id, ownerId);
+    if (act.mode !== 'cbt' || quiz.kind !== 'exam') throw new HttpError(422, 'Only exams created in the exam flow can be edited here', 'not_exam');
+    const started = await one<{ n: number }>(this.db, 'select count(*)::int as n from attempts where activity_id=$1', [activityId]);
+    if (started && started.n > 0) throw new HttpError(409, 'Candidates have already started this exam, so its questions and rules are locked.', 'exam_locked');
+    const a = this.examActivity(quiz.id, raw);
+    const { version } = await this.publish(quiz.id, ownerId);
+    const ver = await this.getVersion(quiz.id, version);
+    const r = await one<any>(this.db, 'update activities set quiz_version=$2, title=$3, settings=$4 where id=$1 returning *', [activityId, version, a.title || ver.title, JSON.stringify(this.settingsOf(a))]);
+    return this.shape(r);
+  }
+
   async setActivityStatus(id: string, ownerId: string, status: 'open' | 'closed') {
     await this.ownActivity(id, ownerId);
     await this.db.query('update activities set status=$2 where id=$1', [id, status]);

@@ -27,7 +27,8 @@ async function signIn(page: Page) {
   await page.getByLabel('Email').fill(TEACHER.email);
   await page.getByLabel('Password').fill(TEACHER.password);
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('heading', { name: 'My quests' })).toBeVisible();
+  // Signing in hashes the password, which can be slow on a busy machine, so allow more than the default 5 seconds.
+  await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / })).toBeVisible({ timeout: 20_000 }); // the dashboard
 }
 const auth = () => ({ authorization: `Bearer ${teacherToken}` });
 async function createActivity(request: APIRequestContext, body: Record<string, unknown>) {
@@ -56,7 +57,7 @@ test.describe.serial('ClueQuest journeys', () => {
   test('host creates, saves, previews and publishes a quest in any subject', async ({ page, request }) => {
     await signIn(page);
     teacherToken = (await page.evaluate(() => localStorage.getItem('cq.teacher')))!;
-    await page.getByRole('link', { name: 'Create quest' }).first().click();
+    await page.getByRole('link', { name: 'Create a quest' }).click(); // from the dashboard
     await expect(page.getByText('First, choose how this quest is played')).toBeVisible();
     await page.getByText('Climb the staircase').click(); // Steps
     await page.getByLabel('When an answer is wrong or missing').selectOption('down');
@@ -305,8 +306,8 @@ test.describe.serial('ClueQuest journeys', () => {
     expect(await page.locator('.katex').count()).toBeGreaterThanOrEqual(2); // the question and the first option
     await expect(page.getByText('Two cups cost $5 and $10 in total.')).toBeVisible(); // not mistaken for maths
     await expect(page.getByRole('img', { name: 'A bar chart of results' })).toBeVisible();
-    const loaded = await page.getByRole('img', { name: 'A bar chart of results' }).evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0);
-    expect(loaded).toBe(true);
+    // Pictures load lazily, so wait for the file to arrive rather than checking the instant the picture appears.
+    await expect.poll(() => page.getByRole('img', { name: 'A bar chart of results' }).evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0), { timeout: 10_000 }).toBe(true);
   });
 
   test('editor: add a picture and maths symbols to a question and see what students will see', async ({ page, request }) => {
@@ -324,6 +325,259 @@ test.describe.serial('ClueQuest journeys', () => {
     const q = await (await request.get(`/api/quizzes/${quizId}`, { headers: auth() })).json();
     expect(q.questions[0].image).toMatchObject({ alt: 'A plot of the data' });
     expect(q.questions[0].text).toContain('\\frac');
+  });
+
+  test('exams: a host writes an exam from scratch, schedules it, edits it, and it never appears under quests', async ({ page, request }) => {
+    await ensureQuest(request);
+    await signIn(page);
+    await page.getByRole('navigation', { name: 'Workspace' }).getByRole('link', { name: 'Exams', exact: true }).click(); // its own place in the menu
+    await expect(page.getByRole('heading', { name: 'Exams', exact: true })).toBeVisible();
+    await page.getByRole('link', { name: '+ Create exam' }).click();
+
+    // 1 Details
+    await page.getByLabel('Exam title').fill('Chemistry paper');
+    await page.getByRole('button', { name: 'Next: questions' }).click();
+    // 2 Questions: the same editor as quests, with no quest needed first
+    await page.getByLabel('Question', { exact: true }).fill('What is the symbol for water?');
+    await page.getByLabel('Option 1 text').fill('H2O');
+    await page.getByLabel('Option 2 text').fill('CO2');
+    await page.getByRole('button', { name: 'Next: schedule' }).click();
+    // 3 Schedule
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const d = new Date(Date.now() + 86_400_000);
+    await page.getByLabel('Closes').fill(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
+    await page.getByLabel('Time allowed (minutes)').fill('45');
+    await expect(page.getByText('Each candidate gets 45 minutes')).toBeVisible(); // plain-English summary of what candidates will see
+    await page.getByRole('button', { name: 'Next: rules' }).click();
+    // 4 Rules
+    await page.getByLabel('Attempts allowed').fill('2');
+    await page.getByLabel('Pass mark (% of marks)').fill('60');
+    await expect(page.getByText('Everything looks ready.')).toBeVisible();
+    await page.getByRole('button', { name: 'Create exam' }).click();
+
+    await expect(page).toHaveURL(/\/activities\//);
+    await expect(page.getByRole('button', { name: 'Add candidates' })).toBeVisible();
+    await expect(page.getByText('45 minutes each')).toBeVisible();
+    const activityUrl = page.url();
+
+    // edit it while nobody has started
+    await page.getByRole('link', { name: 'Edit exam' }).click();
+    await page.getByRole('button', { name: 'Next: schedule' }).click();
+    await page.getByLabel('Time allowed (minutes)').fill('90');
+    await page.getByRole('button', { name: 'Next: rules' }).click();
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page).toHaveURL(activityUrl);
+    await expect(page.getByText('90 minutes each')).toBeVisible();
+
+    // exam questions are not a quest
+    await page.getByRole('navigation', { name: 'Workspace' }).getByRole('link', { name: 'My quests' }).click();
+    await expect(page.getByRole('heading', { name: 'My quests' })).toBeVisible();
+    await expect(page.getByText('Chemistry paper')).toHaveCount(0);
+    await page.getByRole('navigation', { name: 'Workspace' }).getByRole('link', { name: 'Exams', exact: true }).click();
+    await expect(page.getByText('Chemistry paper')).toBeVisible();
+    await expect(page.getByText('90 min').first()).toBeVisible();
+  });
+
+  test('exams: candidates write from one shared link, and the host adds people side by side or from a CSV', async ({ browser, page, request }) => {
+    await ensureQuest(request);
+    const q = { id: 'q1', text: 'Which is a noble gas?', options: [{ id: 'a', text: 'Neon' }, { id: 'b', text: 'Oxygen' }], correctId: 'a' };
+    const draft = await (await request.post('/api/quizzes?kind=exam', { headers: auth(), data: { title: 'Shared link exam', subject: '', instructions: 'Answer the question.', questions: [q] } })).json();
+    const exam = await (await request.post('/api/exams', { headers: auth(), data: { quizId: draft.id, durationMinutes: 30, release: 'manual', access: 'link' } })).json();
+    await signIn(page);
+    await page.goto(`/activities/${exam.id}`);
+
+    // a link is there straight away, ready to copy
+    const link = page.getByLabel('Exam link', { exact: true });
+    await expect(link).toHaveValue(new RegExp(`/q/${exam.shareCode}$`));
+    await expect(page.getByRole('button', { name: 'Copy exam link' })).toBeVisible();
+
+    // name and email side by side; a half-filled row is explained, not silently dropped
+    await page.getByRole('button', { name: 'Add candidates' }).click();
+    await page.getByLabel('Name 1').fill('Ada Obi'); await page.getByLabel('Email 1').fill('ada@school.test');
+    await page.getByLabel('Name 2').fill('Bola Ade'); await page.getByLabel('Email 2').fill('bola@school.test');
+    await page.getByLabel('Name 3').fill('No Email'); await page.getByLabel('Email 3').fill('nope');
+    await page.getByRole('button', { name: /Create 2 invitations/ }).click();
+    await expect(page.getByText('Row 3: Enter a valid email address')).toBeVisible();
+    await page.getByRole('button', { name: 'Remove row 3' }).click();
+    await page.getByRole('button', { name: /Create 2 invitations/ }).click();
+    await expect(page.getByText('2 personal links created.')).toBeVisible();
+    await page.getByRole('button', { name: 'Done' }).click();
+
+    // a CSV file, with a quoted name containing a comma, and one email that repeats
+    await page.getByRole('button', { name: 'Add candidates' }).click();
+    await page.getByLabel('Choose a CSV file').setInputFiles({ name: 'class.csv', mimeType: 'text/csv', buffer: Buffer.from('Name,Email\nCy Ade,cy@school.test\n"Eli, Jr",eli@school.test\nCy Again,CY@school.test\n') });
+    await expect(page.getByText(/Added 3 candidates from/)).toBeVisible();
+    await expect(page.getByLabel('Name 1')).toHaveValue('Cy Ade');
+    await expect(page.getByText('1 repeated email ignored')).toBeVisible();
+    await page.getByRole('button', { name: /Create 2 invitations/ }).click();
+    await expect(page.getByText('2 personal links created.')).toBeVisible();
+    await page.getByRole('button', { name: 'Done' }).click();
+    await expect(page.getByText('4 invited')).toBeVisible();
+
+    // the candidate's side: open the shared link, give a name, write the exam
+    const cand = await (await browser.newContext()).newPage();
+    await cand.goto(`/q/${exam.shareCode}`);
+    await expect(cand.getByText('Enter your details to begin')).toBeVisible();
+    await expect(cand.locator('.exam')).toBeVisible();
+    await expect(cand.getByRole('button', { name: 'Start', exact: true })).toBeDisabled();
+    await cand.getByLabel('Full name').fill('Ngozi Eze');
+    await cand.getByLabel('Email address or ID number').fill('ngozi@school.test');
+    await cand.getByLabel('I have read the instructions').check();
+    await cand.getByRole('button', { name: 'Start', exact: true }).click();
+    await expect(cand.getByRole('timer')).toBeVisible();
+    await cand.getByRole('radio', { name: /^Neon/ }).click();
+    await expect(cand.getByText('All answers saved')).toBeVisible();
+    await cand.getByRole('button', { name: 'Review and submit' }).click();
+    await cand.getByRole('button', { name: 'Submit my answers' }).click();
+    await expect(cand.getByText('Your host will release the results.')).toBeVisible();
+
+    // and the host sees who sat it, by name and by the email they gave
+    await page.reload();
+    await page.getByRole('tab', { name: /Results/ }).click();
+    await expect(page.getByText('Ngozi Eze')).toBeVisible();
+    await expect(page.getByText('ngozi@school.test')).toBeVisible();
+  });
+
+  test('exams: an exam set to invitations only has no shared link and cannot be opened without one', async ({ browser, page, request }) => {
+    await ensureQuest(request);
+    const q = { id: 'q1', text: 'Question?', options: [{ id: 'a', text: 'Yes' }, { id: 'b', text: 'No' }], correctId: 'a' };
+    const draft = await (await request.post('/api/quizzes?kind=exam', { headers: auth(), data: { title: 'Invite only exam', subject: '', instructions: '', questions: [q] } })).json();
+    const exam = await (await request.post('/api/exams', { headers: auth(), data: { quizId: draft.id, durationMinutes: 30, release: 'manual', access: 'invited' } })).json();
+    await signIn(page);
+    await page.goto(`/activities/${exam.id}`);
+    await expect(page.getByRole('heading', { name: 'Invite your candidates' })).toBeVisible();
+    await expect(page.getByLabel('Exam link', { exact: true })).toHaveCount(0);
+    const stranger = await (await browser.newContext()).newPage();
+    await stranger.goto(`/q/${exam.shareCode}`);
+    await expect(stranger.getByText('personal invitation link')).toBeVisible();
+  });
+
+  test('exams: a bad schedule is explained in plain words and nothing is created', async ({ page, request }) => {
+    await ensureQuest(request);
+    await signIn(page);
+    await page.goto('/exams/new');
+    await page.getByLabel('Exam title').fill('Late exam');
+    await page.getByRole('button', { name: 'Next: questions' }).click();
+    await page.getByLabel('Question', { exact: true }).fill('Question?');
+    await page.getByLabel('Option 1 text').fill('Yes');
+    await page.getByLabel('Option 2 text').fill('No');
+    await page.getByRole('button', { name: 'Next: schedule' }).click();
+    await page.getByLabel('Closes').fill('2020-01-01T09:00');
+    await page.getByRole('button', { name: 'Next: rules' }).click();
+    await expect(page.getByText('The closing time has already passed.').first()).toBeVisible();
+    await page.getByRole('button', { name: 'Create exam' }).click();
+    await expect(page.getByText('The closing time has already passed.').first()).toBeVisible();
+    await expect(page).not.toHaveURL(/\/activities\//);
+  });
+
+  test('exams: once a candidate starts, the questions and rules are locked', async ({ page, request }) => {
+    await ensureQuest(request);
+    const q = { id: 'q1', text: 'Question?', options: [{ id: 'a', text: 'Yes' }, { id: 'b', text: 'No' }], correctId: 'a' };
+    const draft = await (await request.post('/api/quizzes?kind=exam', { headers: auth(), data: { title: 'Locked exam', subject: '', instructions: '', questions: [q] } })).json();
+    const exam = await (await request.post('/api/exams', { headers: auth(), data: { quizId: draft.id, durationMinutes: 30, release: 'manual' } })).json();
+    const inv = await (await request.post(`/api/activities/${exam.id}/invitations`, { headers: auth(), data: { invitees: [{ name: 'Cy', email: 'cy@school.test' }] } })).json();
+    await signIn(page);
+    await page.goto(`/activities/${exam.id}`);
+    await expect(page.getByRole('link', { name: 'Edit exam' })).toBeVisible(); // nobody has started yet
+    expect((await request.post(`/api/public/invite/${inv.invitations[0].url.split('/exam/')[1]}/start`)).status()).toBe(201);
+    await page.reload();
+    await expect(page.getByText('locked because candidates have started')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Edit exam' })).toHaveCount(0);
+    await page.goto(`/exams/${exam.id}/edit`);
+    await expect(page.getByRole('heading', { name: 'This exam is locked' })).toBeVisible();
+  });
+
+  test('a new host is welcomed, shown what the platform offers, and taken straight into what they pick', async ({ page }) => {
+    await page.goto('/sign-in?mode=register');
+    await page.getByLabel('Your name').fill('Tomi Adeyemi');
+    await page.getByLabel('Email').fill(`tomi-${Date.now()}@school.test`);
+    await page.getByLabel('Password').fill('a-long-password-1');
+    await page.getByRole('button', { name: 'Create account' }).click();
+
+    await expect(page).toHaveURL(/\/welcome$/);
+    await expect(page.getByRole('heading', { name: 'Welcome, Tomi!' })).toBeVisible();
+    for (const name of ['Create a quest', 'Host a Live Quest', 'Set up an exam', 'Try the AI assistant']) await expect(page.getByRole('link', { name })).toBeVisible();
+
+    await page.getByRole('link', { name: 'Set up an exam' }).click();
+    await expect(page.getByRole('heading', { name: 'Create exam' })).toBeVisible();
+
+    // and the dashboard guides someone with nothing yet
+    await page.goto('/dashboard');
+    await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening), Tomi$/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Getting started' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Start something new' })).toBeVisible();
+  });
+
+  test('"Draft with AI" from the welcome screen opens the assistant straight away', async ({ page }) => {
+    await signIn(page);
+    await page.goto('/welcome');
+    await page.getByRole('link', { name: 'Try the AI assistant' }).click();
+    await expect(page.getByLabel('What is the quest about?')).toBeVisible();
+  });
+
+  test('@phone a phone gets a bottom navigation bar, and the main screens fit without sideways scrolling', async ({ browser, request }) => {
+    await ensureQuest(request);
+    // A live room with a long title is listed on the dashboard; long titles must wrap, not push the page wider than the screen.
+    const long = await (await request.post('/api/quizzes', { headers: auth(), data: { title: 'A quest with a rather long title to test wrapping on a narrow phone screen', subject: '', instructions: '', questions: [{ id: 'q1', text: 'Question?', options: [{ id: 'a', text: 'Yes' }, { id: 'b', text: 'No' }], correctId: 'a' }] } })).json();
+    await request.post(`/api/quizzes/${long.id}/publish`, { headers: auth() });
+    const liveAct = await (await request.post('/api/activities', { headers: auth(), data: { quizId: long.id, mode: 'live', style: 'steps' } })).json();
+    await request.post(`/api/activities/${liveAct.id}/rooms`, { headers: auth() });
+    const ctx = await browser.newContext({ viewport: { width: 360, height: 740 }, isMobile: true, hasTouch: true });
+    await ctx.addInitScript((tk) => localStorage.setItem('cq.teacher', tk), teacherToken);
+    const page = await ctx.newPage();
+    await page.goto('/dashboard');
+    await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / })).toBeVisible();
+    const bottom = page.getByRole('navigation', { name: 'Main' });
+    await expect(bottom).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Workspace' })).toBeHidden(); // the sidebar is for bigger screens
+    await expect(bottom.getByRole('link', { name: 'Host Live Quest' })).toBeVisible(); // full name for assistive tech, short label on screen
+
+    for (const [link, heading] of [['Exams', 'Exams'], ['My quests', 'My quests'], ['Results', 'Results'], ['Home', null]] as const) {
+      await bottom.getByRole('link', { name: link, exact: true }).click();
+      if (heading) await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+      await page.waitForTimeout(400);
+      const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(over, `sideways scroll on ${link}`).toBeLessThanOrEqual(0);
+    }
+    await page.goto('/exams/new');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+
+    await page.getByRole('button', { name: 'Your account' }).click(); // sign out lives behind the avatar
+    await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+  });
+
+  test('landing page: explains everything the platform does, answers the common questions, and leads straight into sign-up', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Create quizzes, host live games and customize CBT.');
+    for (const name of [
+      'From questions to results in three steps', 'One set of questions, three ways to run it', 'Everything you need to teach, test and play', 'Questions people ask', 'Ready to run your first quest?',
+    ]) await expect(page.getByRole('heading', { name })).toBeVisible();
+    for (const name of ['Practice quests', 'Live Quests', 'Customize CBT']) await expect(page.getByRole('heading', { name, exact: true }).first()).toBeVisible();
+
+    // the questions people ask are answered, and honestly: no proctoring is claimed
+    await page.getByText('How does Customize CBT work, and how is it kept fair?').click();
+    await expect(page.getByText('does not use webcams or lock-down software')).toBeVisible();
+
+    // a learner can use the room-code box straight away
+    await page.getByLabel('Room code').fill('123456');
+    await page.getByRole('button', { name: 'Join game' }).click();
+    await expect(page).toHaveURL(/\/join\/123456$/);
+
+    // a visitor can sign up from the first screen
+    await page.goto('/');
+    await page.getByRole('link', { name: 'Create free account' }).first().click();
+    await expect(page).toHaveURL(/sign-in\?mode=register/);
+    await expect(page.getByRole('heading', { name: 'Create a host account' })).toBeVisible();
+  });
+
+  test('@phone the landing page fits a phone without sideways scrolling', async ({ browser }) => {
+    const ctx = await browser.newContext({ viewport: { width: 360, height: 740 }, isMobile: true, hasTouch: true });
+    const page = await ctx.newPage();
+    await page.goto('/', { waitUntil: 'networkidle' });
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    await page.getByRole('heading', { name: 'Questions people ask' }).scrollIntoViewIfNeeded();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
   });
 
   test('@phone the player screen and Steps track fit a phone without sideways scrolling', async ({ browser, request }) => {

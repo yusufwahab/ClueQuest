@@ -14,24 +14,24 @@ export default function SignIn() {
   const [mode, setMode] = useState<'login' | 'register'>(params.get('mode') === 'register' ? 'register' : 'login');
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [name, setName] = useState('');
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
-  if (user) return <Navigate to="/quizzes" replace />;
+  if (user) return <Navigate to={mode === 'register' ? '/welcome' : '/dashboard'} replace />;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setError(''); setBusy(true);
     try {
       if (mode === 'login') await login(email, password); else await register(email, password, name);
-      nav('/quizzes');
+      nav(mode === 'register' ? '/welcome' : '/dashboard');
     } catch (err) { setError(err instanceof ApiError ? err.message : 'Something went wrong'); } finally { setBusy(false); }
   };
   return (
     <Backdrop>
       <main className="container-page grid min-h-screen items-center gap-8 py-8 md:grid-cols-[1.1fr_1fr] md:gap-14">
         <div className="text-white">
-          <Link to="/" className="inline-flex items-center gap-2.5 font-display text-2xl font-semibold"><Logo light size={36} />{brand.name}</Link>
+          <Link to="/" className="inline-flex items-center gap-2.5 font-brand text-2xl font-extrabold"><Logo light size={36} />{brand.name}</Link>
           <p className="font-display mt-6 text-4xl font-semibold leading-tight sm:text-5xl md:mt-12">{mode === 'login' ? 'Welcome back, host.' : 'Start your first quest.'}</p>
           <p className="mt-3 max-w-md text-lg font-semibold text-white/90">{mode === 'login' ? 'Sign in to build quests and run games.' : 'Free to start. It takes under a minute.'}</p>
           <ul className="mt-6 hidden space-y-3 md:block">
-            {PERKS.map((p) => <li key={p} className="flex items-start gap-3 font-semibold"><span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-sun text-ink"><Icon name="check" className="h-4 w-4" /></span>{p}</li>)}
+            {PERKS.map((p) => <li key={p} className="flex items-start gap-3 font-semibold"><span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-white/25 text-white"><Icon name="check" className="h-4 w-4" /></span>{p}</li>)}
           </ul>
         </div>
         <form className="card space-y-4 animate-rise" onSubmit={submit}>

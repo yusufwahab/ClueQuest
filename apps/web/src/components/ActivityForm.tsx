@@ -52,8 +52,8 @@ export default function ActivityForm({ quizId, fixedMode, submitLabel = 'Create'
       {page === 'How' && (
         <fieldset className="space-y-3">
           <legend className="text-lg font-extrabold">How will people take it?</legend>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {(Object.keys(MODE_TEXT) as Mode[]).map((m) => (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {(Object.keys(MODE_TEXT) as Mode[]).filter((m) => m !== 'cbt').map((m) => (
               <label key={m} className={choice(mode === m)}>
                 <input type="radio" className="sr-only" name="mode" checked={mode === m} onChange={() => setMode(m)} />
                 <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary text-white"><Icon name={MODE_TEXT[m].icon} className="h-5 w-5" /></span>
@@ -62,6 +62,7 @@ export default function ActivityForm({ quizId, fixedMode, submitLabel = 'Create'
               </label>
             ))}
           </div>
+          <p className="hint">Setting up a timed exam? Exams have their own place in the menu, with their own questions and schedule.</p>
         </fieldset>
       )}
 

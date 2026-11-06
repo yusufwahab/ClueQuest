@@ -48,7 +48,7 @@ export function PointsPreview({ compact = false, animate = false }: { compact?: 
             <div key={`${r}-${o}`} className={`relative flex items-center gap-2 rounded-xl border-2 ${compact ? 'px-2 py-1 text-xs' : 'px-2.5 py-1.5 text-sm'} font-bold ${right ? 'border-accent bg-accent-soft' : 'border-line bg-white'}`}>
               <span className="scale-75"><OptionBadge index={i} /></span>
               <span className="flex-1">{o}</span>
-              {right && <svg viewBox="0 0 24 24" className="h-4 w-4 text-accent" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 13l4 4L19 7" /></svg>}
+              {right && <svg viewBox="0 0 24 24" className="h-4 w-4 text-primary" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 13l4 4L19 7" /></svg>}
               {right && <span key={`p${r}`} className="pop-in absolute -top-2.5 right-6 rounded-full bg-sun px-2 py-0.5 text-xs font-extrabold text-ink shadow">+{round.pts}</span>}
             </div>
           );

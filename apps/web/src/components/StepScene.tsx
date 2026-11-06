@@ -11,6 +11,10 @@ export interface Racer { id: string; nickname: string; step: number }
 const STEP_COLORS = [['#5b3df5', '#8b73ff'], ['#38b6ff', '#8bd6ff'], ['#12b886', '#5fddb4'], ['#ffc933', '#ffe07a'], ['#ff6b6b', '#ff9d9d']] as const;
 const AVATARS = ['#5b3df5', '#ff6b6b', '#12b886', '#38b6ff', '#f08c00', '#d6336c', '#7048e8', '#0b7285'];
 export function avatarColor(id: string) { let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0; return AVATARS[h % AVATARS.length]!; }
+type Rgb = readonly [number, number, number];
+const RISER_LOW: Rgb = [196, 184, 255], RISER_HIGH: Rgb = [58, 31, 176];
+const mixRgb = (a: Rgb, b: Rgb, k: number): Rgb => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+const rgb = (c: Rgb) => `rgb(${Math.round(c[0])} ${Math.round(c[1])} ${Math.round(c[2])})`;
 const initial = (name: string) => (name.trim().charAt(0) || '?').toUpperCase();
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
@@ -207,13 +211,24 @@ export function StepRace({ racers, max, meId, size = 'strip' }: { racers: Racer[
   const text = me ? `Step ${me.step} of ${n}. ${racers.length} players on the staircase.` : `${racers.length} player${racers.length === 1 ? '' : 's'} on the staircase, ${n} steps.`;
   return (
     <div role="img" aria-label={text} className="rounded-2xl bg-primary-soft/70 p-2">
-      <div className="relative" style={{ height }} aria-hidden>
+      <div className="relative overflow-hidden rounded-xl bg-gradient-to-b from-[#f1edff] to-[#ded6ff]" style={{ height }} aria-hidden>
+        {/* The staircase: one continuous run of steps, lighter on the tread (the part you stand on) and darker on the riser, climbing in one violet. */}
         <div className="absolute inset-x-0 bottom-0 flex items-end">
-          {Array.from({ length: cols + 1 }, (_, i) => (
-            <div key={i} style={{ width: `${w}%`, height: blockH(i), background: i === cols ? '#ffc933' : i === 0 ? '#cfc8f7' : STEP_COLORS[i % 5]![0] }} className="rounded-t-md border-r-2 border-primary-soft" />
-          ))}
+          {Array.from({ length: cols + 1 }, (_, i) => {
+            const base = i === 0 ? ([228, 220, 255] as const) : mixRgb(RISER_LOW, RISER_HIGH, i / cols);
+            const tread = i === 0 ? '#f6f2ff' : rgb(mixRgb(base, [255, 255, 255], 0.38));
+            const tt = size === 'big' ? 9 : 5;
+            return <div key={i} style={{ width: `${w}%`, height: blockH(i), background: `linear-gradient(to bottom, ${tread} 0 ${tt}px, ${rgb(base)} ${tt}px)` }} className="border-r border-white/30" />;
+          })}
         </div>
-        <svg viewBox="0 0 24 24" className="absolute h-5 w-5 text-ink" style={{ left: `${(cols + 0.5) * w}%`, bottom: blockH(cols) + 2, marginLeft: -10 }} fill="currentColor"><path d="M12 2l2.9 6.3 6.9.7-5.2 4.6 1.5 6.8L12 17l-6.1 3.4 1.5-6.8L2.2 9l6.9-.7z" /></svg>
+        {/* handrail along the top of the steps */}
+        <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" fill="none">
+          <line x1={0.5 * w} y1={height - blockH(0) - (size === 'big' ? 22 : 12)} x2={(cols + 0.5) * w} y2={height - blockH(cols) - (size === 'big' ? 22 : 12)} stroke="#4527d6" strokeOpacity="0.55" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinecap="round" />
+        </svg>
+        {/* the goal door at the top */}
+        <span className="absolute z-0 grid place-items-center rounded-t-full border-[3px] border-b-0 border-[#c99700] bg-[#fff3b0]" style={{ left: `${(cols + 0.5) * w}%`, bottom: blockH(cols), width: size === 'big' ? 30 : 16, height: size === 'big' ? 44 : 24, marginLeft: size === 'big' ? -15 : -8 }}>
+          <svg viewBox="0 0 24 24" className={size === 'big' ? 'h-5 w-5' : 'h-3 w-3'} fill="#c99700"><path d="M12 2l2.9 6.3 6.9.7-5.2 4.6 1.5 6.8L12 17l-6.1 3.4 1.5-6.8L2.2 9l6.9-.7z" /></svg>
+        </span>
         {cells}
       </div>
       <div aria-hidden className="mt-1 flex text-[10px] font-bold text-muted">

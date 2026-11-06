@@ -10,9 +10,9 @@ export interface AiResult { title: string; subject: string; instructions: string
  * "AI assistant" card for the quest editor. A short form (topic, optional notes, how many, how hard, who for) is sent in ONE request;
  * the answer is handed to the editor as ordinary draft questions that the host reviews. Nothing is saved or published from here.
  */
-export default function AiAssistant({ onResult }: { onResult: (r: AiResult) => void }) {
+export default function AiAssistant({ onResult, autoOpen = false }: { onResult: (r: AiResult) => void; autoOpen?: boolean }) {
   const status = useQuery({ queryKey: ['ai-status'], queryFn: () => api<{ enabled: boolean }>('GET', '/ai/status'), staleTime: 300_000 });
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(autoOpen);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [f, setF] = useState({ topic: '', notes: '', count: 8, difficulty: 'mixed', level: '', language: 'English', optionCount: 4, explanations: false });

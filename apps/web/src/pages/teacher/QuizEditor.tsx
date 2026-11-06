@@ -1,27 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { limits } from '@cluequest/config';
 import { validatePublishable } from '@cluequest/contracts';
 import { ApiError, api } from '../../lib/api';
 import { Field, Loading, Notice, PageHead, Stepper } from '../../components/ui';
 import AiAssistant, { type AiResult } from '../../components/AiAssistant';
-import QuestionMedia from '../../components/QuestionMedia';
-import { Rich, hasMath } from '../../components/Rich';
+import QuestionsEditor, { newQuestion, type Q } from '../../components/QuestionsEditor';
 import ScoringChoice, { type Style, type Wrong } from '../../components/ScoringChoice';
 
-interface Opt { id: string; text: string }
-interface Q { id: string; text: string; options: Opt[]; correctId: string; marks: number; points: number; explanation: string; image?: { id: string; alt: string; url?: string | null } | null }
 interface Draft { title: string; subject: string; instructions: string; questions: Q[] }
-
-const uid = () => Math.random().toString(36).slice(2, 10);
-const newQuestion = (): Q => { const a = uid(), b = uid(); return { id: uid(), text: '', options: [{ id: a, text: '' }, { id: b, text: '' }], correctId: a, marks: 1, points: 100, explanation: '', image: null }; };
 
 export default function QuizEditor() {
   const { id } = useParams();
   const nav = useNavigate();
   const carried = (useLocation().state ?? {}) as { step?: number; qi?: number };
-  const [step, setStep] = useState(carried.step ?? (id ? 2 : 0));
+  const wantsAi = useSearchParams()[0].get('ai') === '1' && !id; // arrived from "Draft with AI"
+  const [step, setStep] = useState(carried.step ?? (id ? 2 : wantsAi ? 1 : 0));
   const [play, setPlayState] = useState<{ style: Style; wrong: Wrong; pass: string }>({ style: 'points', wrong: 'stay', pass: '' });
   const setPlay = (p: Partial<typeof play>) => { setPlayState((x) => ({ ...x, ...p })); setDirty(true); };
   const [qi, setQi] = useState(carried.qi ?? 0);
@@ -45,7 +40,6 @@ export default function QuizEditor() {
   }, [id]);
 
   const edit = (fn: (d: Draft) => void) => { setDraft((d) => { const c = structuredClone(d); fn(c); return c; }); setDirty(true); };
-  const setQ = (i: number, fn: (q: Q) => void) => edit((d) => fn(d.questions[i]!));
 
   const save = async (): Promise<string | null> => {
     setBusy(true); setMsg(null);
@@ -89,11 +83,7 @@ export default function QuizEditor() {
 
   if (loading) return <Loading />;
   const total = draft.questions.reduce((n, q) => n + (Number(q.marks) || 0), 0);
-  const cur = Math.min(qi, draft.questions.length - 1);
-  const q = draft.questions[cur]!;
   const problems = validatePublishable(draft);
-  const blank = (x: Q) => !x.text.trim() || x.options.some((o) => !o.text.trim());
-  const addQuestion = () => { edit((d) => { d.questions.push(newQuestion()); }); setQi(draft.questions.length); };
   const go = (n: number) => { setStep(n); window.scrollTo({ top: 0 }); };
   const published = !!meta?.latestVersion && !dirty;
 
@@ -122,7 +112,7 @@ export default function QuizEditor() {
 
       {step === 1 && (
         <>
-          <AiAssistant onResult={applyAi} />
+          <AiAssistant onResult={applyAi} autoOpen={wantsAi && !dirty && !draft.title} />
           <section className="card space-y-4" aria-label="Quest details">
             <Field label="Title" htmlFor="title"><input id="title" className="field" value={draft.title} onChange={(e) => edit((d) => { d.title = e.target.value; })} maxLength={120} /></Field>
             <Field label="Subject (optional)" htmlFor="subject" hint="For example Mathematics, History, French, Technology."><input id="subject" className="field" value={draft.subject} onChange={(e) => edit((d) => { d.subject = e.target.value; })} maxLength={60} /></Field>
@@ -131,76 +121,7 @@ export default function QuizEditor() {
         </>
       )}
 
-      {step === 2 && (
-        <section className="space-y-4" aria-label="Questions">
-          <div className="flex flex-wrap items-baseline justify-between gap-2"><h2>Questions ({draft.questions.length})</h2><p className="hint">Total marks: {total}</p></div>
-          <nav aria-label="Jump to a question" className="flex flex-wrap gap-2">
-            {draft.questions.map((x, i) => (
-              <button key={x.id} type="button" onClick={() => setQi(i)} aria-label={`Go to question ${i + 1}${blank(x) ? ' (unfinished)' : ''}`} aria-current={i === cur ? 'true' : undefined}
-                className={`grid h-11 w-11 place-items-center rounded-xl border-2 font-extrabold ${i === cur ? 'border-primary bg-primary text-white' : blank(x) ? 'border-sun bg-warn-soft' : 'border-accent bg-accent-soft'}`}>{i + 1}</button>
-            ))}
-            <button type="button" className="h-11 rounded-xl border-2 border-dashed border-primary px-3 font-bold text-primary disabled:opacity-40" disabled={draft.questions.length >= limits.maxQuestions} onClick={addQuestion}>+ Add question</button>
-          </nav>
-
-          <fieldset key={q.id} className="card space-y-4">
-            <legend className="sr-only">Question {cur + 1} of {draft.questions.length}</legend>
-            <p aria-hidden className="chip">Question {cur + 1} of {draft.questions.length}</p>
-            <Field label="Question" htmlFor={`q-${q.id}`}><textarea id={`q-${q.id}`} className="field min-h-20" value={q.text} onChange={(e) => setQ(cur, (x) => { x.text = e.target.value; })} maxLength={1000} /></Field>
-            <QuestionMedia
-              text={q.text} image={q.image ?? null}
-              onImage={(image) => setQ(cur, (x) => { x.image = image; })}
-              onInsert={(tex) => {
-                const el = document.getElementById(`q-${q.id}`) as HTMLTextAreaElement | null;
-                const a = el?.selectionStart ?? q.text.length, b = el?.selectionEnd ?? a;
-                setQ(cur, (x) => { x.text = x.text.slice(0, a) + tex + x.text.slice(b); });
-                requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(a + tex.length, a + tex.length); });
-              }}
-            />
-            <div>
-              <p className="label">Answer options. Tick the correct one.</p>
-              <div className="space-y-2">
-                {q.options.map((o, j) => (
-                  <div key={o.id}>
-                  <div className="flex items-center gap-2">
-                    <input type="radio" className="h-6 w-6 shrink-0 accent-[#12b886]" name={`correct-${q.id}`} checked={q.correctId === o.id} onChange={() => setQ(cur, (x) => { x.correctId = o.id; })} aria-label={`Option ${j + 1} is correct`} />
-                    <input className="field" value={o.text} placeholder={`Option ${j + 1}`} aria-label={`Option ${j + 1} text`} maxLength={300} onChange={(e) => setQ(cur, (x) => { x.options[j]!.text = e.target.value; })} />
-                    <button type="button" className="btn btn-secondary shrink-0 !px-3" disabled={q.options.length <= limits.minOptions} onClick={() => setQ(cur, (x) => { x.options.splice(j, 1); if (x.correctId === o.id) x.correctId = x.options[0]!.id; })} aria-label={`Remove option ${j + 1}`}>✕</button>
-                  </div>
-                  {hasMath(o.text) && <p className="hint ml-8 mt-1">Shows as: <span className="font-semibold text-ink"><Rich text={o.text} inline /></span></p>}
-                  </div>
-                ))}
-              </div>
-              <button type="button" className="btn-quiet mt-2" disabled={q.options.length >= limits.maxOptions} onClick={() => setQ(cur, (x) => { x.options.push({ id: uid(), text: '' }); })}>+ Add option</button>
-            </div>
-            <details className="rounded-xl border border-line p-3">
-              <summary className="cursor-pointer font-bold">Marks, points and explanation (optional)</summary>
-              <div className="mt-3 space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Marks (academic)" htmlFor={`m-${q.id}`} hint="Counts towards the grade and pass mark."><input id={`m-${q.id}`} type="number" min={0.5} step={0.5} className="field" value={q.marks} onChange={(e) => setQ(cur, (x) => { x.marks = Number(e.target.value); })} /></Field>
-                  <Field label="Points (game reward)" htmlFor={`p-${q.id}`} hint="Used by the Points style. Wrong or unanswered earns 0."><input id={`p-${q.id}`} type="number" min={0} step={10} className="field" value={q.points} onChange={(e) => setQ(cur, (x) => { x.points = Number(e.target.value); })} /></Field>
-                </div>
-                <Field label="Explanation (optional)" htmlFor={`e-${q.id}`} hint="Shown with the answer after the question is judged."><input id={`e-${q.id}`} className="field" value={q.explanation} onChange={(e) => setQ(cur, (x) => { x.explanation = e.target.value; })} maxLength={1000} /></Field>
-              </div>
-            </details>
-            <details className="rounded-xl border border-line p-3">
-              <summary className="cursor-pointer font-bold">Move, copy or delete this question</summary>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button type="button" className="btn btn-secondary" disabled={cur === 0} onClick={() => { edit((d) => { const [m] = d.questions.splice(cur, 1); d.questions.splice(cur - 1, 0, m!); }); setQi(cur - 1); }}>Move earlier</button>
-                <button type="button" className="btn btn-secondary" disabled={cur === draft.questions.length - 1} onClick={() => { edit((d) => { const [m] = d.questions.splice(cur, 1); d.questions.splice(cur + 1, 0, m!); }); setQi(cur + 1); }}>Move later</button>
-                <button type="button" className="btn btn-secondary" onClick={() => { edit((d) => { d.questions.splice(cur + 1, 0, { ...structuredClone(q), id: uid(), options: q.options.map((o) => ({ ...o, id: o.id + 'c' })), correctId: q.correctId + 'c' }); }); setQi(cur + 1); }}>Duplicate</button>
-                <button type="button" className="btn btn-secondary text-danger" disabled={draft.questions.length <= 1} onClick={() => { edit((d) => { d.questions.splice(cur, 1); }); setQi(Math.max(0, cur - 1)); }}>Delete question</button>
-              </div>
-            </details>
-          </fieldset>
-
-          <div className="flex justify-between gap-2">
-            <button type="button" className="btn btn-secondary" disabled={cur === 0} onClick={() => setQi(cur - 1)}>← Previous question</button>
-            {cur < draft.questions.length - 1
-              ? <button type="button" className="btn btn-secondary" onClick={() => setQi(cur + 1)}>Next question →</button>
-              : <button type="button" className="btn btn-secondary" disabled={draft.questions.length >= limits.maxQuestions} onClick={addQuestion}>Add another question</button>}
-          </div>
-        </section>
-      )}
+      {step === 2 && <QuestionsEditor questions={draft.questions} qi={qi} setQi={setQi} onEdit={(fn) => edit((d) => fn(d.questions))} />}
 
       {step === 3 && (
         <section className="space-y-4" aria-label="Review and publish">

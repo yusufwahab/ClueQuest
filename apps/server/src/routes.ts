@@ -13,7 +13,7 @@ const brief = (a: any, extra: Record<string, unknown> = {}) => {
   const s = a.settings as any;
   return {
     title: a.title, mode: a.mode, style: a.style, status: a.status, quizVersion: a.quiz_version,
-    steps: s.steps, passMarkPercent: s.passMarkPercent ?? null, attemptLimit: s.attemptLimit ?? null,
+    steps: s.steps, access: s.access ?? 'invited', passMarkPercent: s.passMarkPercent ?? null, attemptLimit: s.attemptLimit ?? null,
     durationMinutes: s.durationMinutes ?? null, opensAt: s.opensAt ?? null, closesAt: s.closesAt ?? null, instantFeedback: !!s.instantFeedback,
     ...extra,
   };
@@ -37,8 +37,9 @@ export function routes(ctx: Ctx) {
   r.get('/me', teacher, (req, res) => res.json({ user: req.user }));
 
   // ---- teacher: quizzes -------------------------------------------------------------------------------------------------
-  r.get('/quizzes', teacher, async (req, res) => res.json({ quizzes: await quizzes.list(uid(req)) }));
-  r.post('/quizzes', teacher, async (req, res) => res.status(201).json(await quizzes.create(uid(req), req.body)));
+  const kindOf = (req: Request) => (req.query.kind === 'exam' ? 'exam' : 'quest');
+  r.get('/quizzes', teacher, async (req, res) => res.json({ quizzes: await quizzes.list(uid(req), kindOf(req)) }));
+  r.post('/quizzes', teacher, async (req, res) => res.status(201).json(await quizzes.create(uid(req), req.body, kindOf(req))));
   r.get('/quizzes/:id', teacher, async (req, res) => res.json(await quizzes.get(id(req), uid(req))));
   r.put('/quizzes/:id', teacher, async (req, res) => res.json(await quizzes.saveDraft(id(req), uid(req), req.body)));
   r.post('/quizzes/:id/publish', teacher, async (req, res) => res.json(await quizzes.publish(id(req), uid(req))));
@@ -66,6 +67,13 @@ export function routes(ctx: Ctx) {
 
   // ---- teacher: activities (a configured use of a published quiz) ---------------------------------------------------
   r.get('/activities', teacher, async (req, res) => res.json({ activities: await quizzes.listActivities(uid(req)) }));
+  // ---- exams (their own questions; independent of quests) -------------------------------------------------------------------
+  r.post('/exams', teacher, async (req, res) => {
+    const { quizId, ...settings } = req.body ?? {};
+    if (typeof quizId !== 'string') throw new HttpError(400, 'Choose the exam questions first', 'invalid');
+    res.status(201).json(await quizzes.createExam(uid(req), quizId, settings));
+  });
+  r.put('/exams/:id', teacher, async (req, res) => res.json(await quizzes.updateExam(uid(req), id(req), req.body ?? {})));
   r.post('/activities', teacher, async (req, res) => res.status(201).json(await quizzes.createActivity(uid(req), req.body)));
   r.get('/activities/:id', teacher, async (req, res) => {
     const a = await quizzes.ownActivity(id(req), uid(req));
@@ -106,14 +114,21 @@ export function routes(ctx: Ctx) {
   r.get('/public/solo/:code', limit('pub', 120, 60_000), async (req, res) => {
     const a = await quizzes.activityByShareCode(id(req, 'code'));
     if (a.mode === 'live') throw new HttpError(422, 'This is a live game. Join it with a room code.', 'wrong_mode');
-    if (a.mode === 'cbt') throw new HttpError(403, 'This exam needs your personal invitation link', 'needs_identity');
+    if (a.mode === 'cbt' && (a.settings as any).access !== 'link') throw new HttpError(403, 'This exam needs your personal invitation link', 'needs_identity');
     const v = await quizzes.getVersion(a.quiz_id, a.quiz_version);
     res.json(brief(a, { subject: v.subject, instructions: v.instructions, questionCount: v.questions.length }));
   });
   r.post('/public/solo/:code/start', limit('start', 60, 60_000), async (req, res) => {
     const a = await quizzes.activityByShareCode(id(req, 'code'));
-    if (a.mode === 'cbt') throw new HttpError(403, 'This exam needs your personal invitation link', 'needs_identity');
     const b = startAttemptSchema.parse(req.body ?? {});
+    if (a.mode === 'cbt') {
+      if ((a.settings as any).access !== 'link') throw new HttpError(403, 'This exam needs your personal invitation link', 'needs_identity');
+      // An open-link exam: the name and email or ID the candidate types identify them, so they can resume and attempts can be counted.
+      const name = (b.name ?? '').trim(), ref = (b.candidateId ?? '').trim().toLowerCase();
+      if (!name) throw new HttpError(400, 'Enter your full name', 'invalid');
+      if (ref.length < 3) throw new HttpError(400, 'Enter your email address or ID number', 'invalid');
+      return void res.status(201).json(await attempts.start(a, { name, learnerRef: ref }));
+    }
     res.status(201).json(await attempts.start(a, { name: b.name }));
   });
 

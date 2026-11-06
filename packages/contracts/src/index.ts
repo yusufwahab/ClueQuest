@@ -87,6 +87,8 @@ export const activitySchema = z.object({
   closesAt: z.string().datetime().nullable().default(null),
   durationMinutes: z.number().int().min(1).max(600).nullable().default(null),
   release: z.enum(['immediate', 'after_close', 'manual']).default('immediate'),
+  /** CBT: who may sit it. 'link' = anyone with the exam link (they enter a name and an email or ID); 'invited' = only people the host invites by email. */
+  access: z.enum(['invited', 'link']).default('invited'),
   /** What a learner may see once released. */
   showAnswers: z.boolean().default(true),
 });
@@ -97,7 +99,7 @@ export const inviteSchema = z.object({ invitees: z.array(z.object({ name: z.stri
 export const registerSchema = z.object({ email: z.string().email(), password: z.string().min(8).max(200), displayName: z.string().trim().min(1).max(60) });
 export const loginSchema = z.object({ email: z.string().email(), password: z.string().min(1).max(200) });
 
-export const startAttemptSchema = z.object({ name: z.string().trim().max(60).optional() });
+export const startAttemptSchema = z.object({ name: z.string().trim().max(60).optional(), candidateId: z.string().trim().max(100).optional() });
 export const saveAnswersSchema = z.object({ answers: z.record(z.string(), z.string().nullable()) });
 export const answerOneSchema = z.object({ questionId: z.string(), optionId: z.string() });
 

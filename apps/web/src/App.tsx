@@ -10,6 +10,10 @@ import QuizPreview from './pages/teacher/QuizPreview';
 import QuizUse from './pages/teacher/QuizUse';
 import ActivityDetail from './pages/teacher/ActivityDetail';
 import HostLive from './pages/teacher/HostLive';
+import Exams from './pages/teacher/Exams';
+import Dashboard from './pages/teacher/Dashboard';
+import Welcome from './pages/teacher/Welcome';
+import ExamEditor from './pages/teacher/ExamEditor';
 import HostRoom from './pages/teacher/HostRoom';
 import Results from './pages/teacher/Results';
 import RoomResults from './pages/teacher/RoomResults';
@@ -36,7 +40,13 @@ export default function App() {
       <Route path="/exam/:token" element={<Entry kind="invite" />} />
       <Route path="/launch/:token" element={<Entry kind="launch" />} />
       <Route path="/attempt/:token" element={<AttemptPlay />} />
+      <Route path="/welcome" element={<Private><Welcome /></Private>} />
       <Route element={<Private><Shell /></Private>}>
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/exams" element={<Exams />} />
+        <Route path="/exams/new" element={<ExamEditor />} />
+        <Route path="/exams/draft/:quizId" element={<ExamEditor />} />
+        <Route path="/exams/:activityId/edit" element={<ExamEditor />} />
         <Route path="/quizzes" element={<Quizzes />} />
         <Route path="/quizzes/new" element={<QuizEditor />} />
         <Route path="/quizzes/:id" element={<QuizEditor />} />

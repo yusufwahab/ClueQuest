@@ -34,7 +34,7 @@ export default function JoinRoom() {
 
   return (
     <Backdrop><main className="container-page max-w-md py-10">
-      <Link to="/" className="mb-6 flex items-center gap-2.5 font-display text-2xl font-semibold text-white"><Logo light size={34} />{brand.name}</Link>
+      <Link to="/" className="mb-6 flex items-center gap-2.5 font-brand text-2xl font-extrabold text-white"><Logo light size={34} />{brand.name}</Link>
       <form className="card animate-rise space-y-4" onSubmit={join}>
         <h1 className="text-3xl">Join a live game</h1>
         {!params.code && <div><label className="label" htmlFor="rc">Room code</label><input id="rc" className="field text-center text-2xlst" inputMode="numeric" value={formatRoomCode(code)} onChange={(e) => setCode(normaliseRoomCode(e.target.value).slice(0, 6))} placeholder="000 000" /></div>}

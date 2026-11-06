@@ -87,14 +87,14 @@ export function Stepper({ steps, current, onGo }: { steps: string[]; current: nu
         const state = i < current ? 'done' : i === current ? 'now' : 'next';
         const body = (
           <>
-            <span aria-hidden className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-sm font-extrabold ${state === 'next' ? 'bg-[#e4e0fb] text-muted' : state === 'done' ? 'bg-accent text-white' : 'bg-primary text-white'}`}>{state === 'done' ? '✓' : i + 1}</span>
+            <span aria-hidden className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-sm font-extrabold ${state === 'next' ? 'bg-[#e4e0fb] text-muted' : state === 'done' ? 'bg-primary-dark text-white' : 'bg-primary text-white'}`}>{state === 'done' ? '✓' : i + 1}</span>
             <span className={`truncate text-sm font-bold ${state === 'now' ? 'text-ink' : 'text-muted'} ${state === 'now' ? '' : 'hidden sm:inline'}`}>{s}</span>
           </>
         );
         return (
           <li key={s} className="flex min-w-0 flex-1 items-center gap-2" aria-current={state === 'now' ? 'step' : undefined}>
             {state === 'done' && onGo ? <button type="button" className="flex min-w-0 items-center gap-2" onClick={() => onGo(i)}>{body}</button> : <span className="flex min-w-0 items-center gap-2">{body}</span>}
-            {i < steps.length - 1 && <span aria-hidden className={`h-0.5 flex-1 ${i < current ? 'bg-accent' : 'bg-[#e4e0fb]'}`} />}
+            {i < steps.length - 1 && <span aria-hidden className={`h-0.5 flex-1 ${i < current ? 'bg-primary-dark' : 'bg-[#e4e0fb]'}`} />}
           </li>
         );
       })}
@@ -106,9 +106,9 @@ export function Stepper({ steps, current, onGo }: { steps: string[]; current: nu
 export function Shapes({ small = false }: { small?: boolean }) {
   return (
     <>
-      <div aria-hidden className={`absolute animate-float rounded-full bg-coral/80 ${small ? '-right-8 -top-12 h-40 w-40' : '-right-16 -top-16 h-64 w-64'}`} />
-      <div aria-hidden className={`absolute animate-float rounded-full bg-sky/70 [animation-delay:1.5s] ${small ? '-bottom-14 right-28 h-28 w-28' : '-bottom-20 left-1/3 h-56 w-56'}`} />
-      <div aria-hidden className={`absolute hidden rotate-12 rounded-lg bg-sun sm:block ${small ? 'bottom-5 right-8 h-8 w-8' : 'left-6 top-40 h-10 w-10'}`} />
+      <div aria-hidden className={`absolute animate-float rounded-full bg-[#7a3cff]/40 blur-3xl ${small ? '-right-8 -top-12 h-40 w-40' : '-right-16 -top-16 h-64 w-64'}`} />
+      <div aria-hidden className={`absolute animate-float rounded-full bg-primary/50 blur-3xl [animation-delay:1.5s] ${small ? '-bottom-14 right-28 h-28 w-28' : '-bottom-20 left-1/3 h-56 w-56'}`} />
+      <div aria-hidden className={`absolute hidden rotate-12 rounded-lg bg-sun/90 sm:block ${small ? 'bottom-5 right-8 h-8 w-8' : 'left-6 top-40 h-10 w-10'}`} />
     </>
   );
 }
@@ -177,6 +177,9 @@ const ICONS: Record<string, ReactNode> = {
   spark: <path d="M12 3l2.2 6.3L21 12l-6.8 2.7L12 21l-2.2-6.3L3 12l6.8-2.7z" />,
   check: <path d="M5 13l4 4L19 7" />,
   plus: <path d="M12 5v14M5 12h14" />,
+  home: <path d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10" />,
+  bolt: <path d="M13 2L4 14h7l-1 8 9-12h-7z" />,
+  bell: <path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7M10 20a2 2 0 0 0 4 0" />,
   cross: <path d="M6 6l12 12M18 6L6 18" />,
   grid: <><rect x="3" y="3" width="7" height="7" rx="2" /><rect x="14" y="3" width="7" height="7" rx="2" /><rect x="3" y="14" width="7" height="7" rx="2" /><rect x="14" y="14" width="7" height="7" rx="2" /></>,
   chart: <path d="M4 20V10M10 20V4M16 20v-8M22 20H2" />,
@@ -197,7 +200,7 @@ export function Stat({ label, value, sub }: { label: string; value: ReactNode; s
   return (
     <div className="rounded-2xl border border-line bg-surface p-4 shadow-[0_8px_20px_-16px_rgba(23,19,71,0.4)]">
       <p className="text-sm font-bold text-muted">{label}</p>
-      <p className="text-3xl font-extrabold text-primary">{value}</p>
+      <p className="font-brand text-3xl font-extrabold text-primary">{value}</p>
       {sub && <p className="hint">{sub}</p>}
     </div>
   );

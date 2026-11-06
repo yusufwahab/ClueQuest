@@ -20,13 +20,14 @@ export default function Entry({ kind }: { kind: Kind }) {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
+  const [cid, setCid] = useState('');
 
   useEffect(() => { api('GET', base(kind, key), { auth: false }).then(setInfo).catch(setError); }, [kind, key]);
 
   const start = async () => {
     setBusy(true); setError(null);
     try {
-      const r = await api('POST', `${base(kind, key)}/start`, { body: kind === 'solo' ? { name: name.trim() || undefined } : {}, auth: false });
+      const r = await api('POST', `${base(kind, key)}/start`, { body: kind === 'solo' ? { name: name.trim() || undefined, candidateId: cid.trim() || undefined } : {}, auth: false });
       nav(`/attempt/${r.token}`);
     } catch (e) { setError(e as ApiError); setBusy(false); }
   };
@@ -61,6 +62,14 @@ export default function Entry({ kind }: { kind: Kind }) {
                 <li>When the time is up, your exam is submitted for you with the answers saved so far.</li>
               </ul>
             </div>
+            {kind === 'solo' && info.status !== 'closed' && (
+              <div className="space-y-3 rounded-lg border border-line bg-paper p-4">
+                <p className="font-semibold">Enter your details to begin</p>
+                <div><label className="label" htmlFor="cname">Full name</label><input id="cname" className="field" value={name} maxLength={60} autoComplete="name" onChange={(e) => setName(e.target.value)} /></div>
+                <div><label className="label" htmlFor="cid">Email address or ID number</label><input id="cid" className="field" value={cid} maxLength={100} autoComplete="email" onChange={(e) => setCid(e.target.value)} />
+                  <p className="hint mt-1">Used to let you continue if you are disconnected, and to count your attempts.</p></div>
+              </div>
+            )}
             {error && <Notice kind="bad">{error.message}</Notice>}
             {info.status === 'closed' ? <Notice kind="warn">This exam is closed.</Notice> : info.canStart === false ? (
               <div className="space-y-2"><Notice kind="warn">You have used all your attempts.</Notice>
@@ -69,7 +78,7 @@ export default function Entry({ kind }: { kind: Kind }) {
             ) : (
               <div className="space-y-3 border-t border-line pt-4">
                 {!resume && <label className="flex items-start gap-3"><input type="checkbox" className="mt-1 h-5 w-5 accent-[#1f3b8a]" checked={ready} onChange={(e) => setReady(e.target.checked)} /><span>I have read the instructions and I am ready to begin.</span></label>}
-                <button className="btn btn-primary w-full sm:w-auto" onClick={start} disabled={busy || (!resume && !ready)}>{resume ? 'Resume your attempt' : 'Start'}</button>
+                <button className="btn btn-primary w-full sm:w-auto" onClick={start} disabled={busy || (!resume && !ready) || (kind === 'solo' && (!name.trim() || cid.trim().length < 3))}>{resume ? 'Resume your attempt' : 'Start'}</button>
               </div>
             )}
           </div>
@@ -80,7 +89,7 @@ export default function Entry({ kind }: { kind: Kind }) {
 
   return (
     <Backdrop><main className="container-page max-w-2xl py-8">
-      <p className="mb-6 flex items-center gap-2.5 font-display text-2xl font-semibold text-white"><Logo light size={34} />{brand.name}</p>
+      <p className="mb-6 flex items-center gap-2.5 font-brand text-2xl font-extrabold text-white"><Logo light size={34} />{brand.name}</p>
       {!info && !error && <div className="card"><Loading /></div>}
       {error && !info && (
         <div className="card space-y-3">
