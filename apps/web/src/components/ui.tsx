@@ -153,6 +153,21 @@ export function Field({ label, hint, children, htmlFor }: { label: string; hint?
   );
 }
 
+/** A password box with a button that shows or hides what was typed. */
+export function PasswordInput(props: Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type'>) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <input {...props} type={show ? 'text' : 'password'} className={`field pr-14 ${props.className ?? ''}`} />
+      <button type="button" onClick={() => setShow((s) => !s)} aria-label={show ? 'Hide characters' : 'Show characters'} aria-pressed={show} className="absolute right-1.5 top-1/2 grid h-10 w-10 -translate-y-1/2 cursor-pointer place-items-center rounded-xl text-muted transition hover:bg-primary-soft hover:text-primary">
+        <svg aria-hidden viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {show ? <><path d="M17.94 17.94A10.9 10.9 0 0 1 12 20C5 20 1 12 1 12a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.1 9.1 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24" /><path d="M1 1l22 22" /></> : <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></>}
+        </svg>
+      </button>
+    </div>
+  );
+}
+
 export function Loading({ what = 'Loading' }: { what?: string }) {
   return <p className="hint py-8 text-center" role="status">{what}…</p>;
 }

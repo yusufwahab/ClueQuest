@@ -3,7 +3,7 @@ import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 import { brand } from '@cluequest/config';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { Backdrop, Field, Icon, Logo, Notice } from '../components/ui';
+import { Backdrop, Field, Icon, Logo, Notice, PasswordInput } from '../components/ui';
 
 const PERKS = ['Write a quest once, use it for practice, live games and CBTs', 'Let the AI assistant draft the questions for you', 'Learners never need an account'];
 
@@ -43,7 +43,7 @@ export default function SignIn() {
           {mode === 'register' && <Field label="Your name" htmlFor="name"><input id="name" className="field" value={name} onChange={(e) => setName(e.target.value)} required autoComplete="name" placeholder="e.g. Ada Obi" /></Field>}
           <Field label="Email" htmlFor="email"><input id="email" type="email" className="field" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" placeholder="you@example.com" /></Field>
           <Field label="Password" htmlFor="password" hint={mode === 'register' ? 'At least 8 characters.' : undefined}>
-            <input id="password" type="password" className="field" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={mode === 'register' ? 8 : 1} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
+            <PasswordInput id="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={mode === 'register' ? 8 : 1} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
           </Field>
           <button className="btn btn-primary w-full" disabled={busy}>{mode === 'login' ? 'Sign in' : 'Create account'}</button>
           <div className="border-t border-line pt-3 text-center">

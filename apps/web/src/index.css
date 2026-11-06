@@ -58,6 +58,7 @@
   h3 { font-size: 1.1rem; font-weight: 700; }
   :focus-visible { outline: 3px solid var(--color-sky); outline-offset: 2px; }
   button, a, input, select, textarea { touch-action: manipulation; }
+  button:not(:disabled), a[href], summary, select, [role='button'], [role='tab'], label[for], input[type='checkbox'], input[type='radio'], input[type='file'] { cursor: pointer; }
   ::selection { background: var(--color-sun); color: var(--color-ink); }
 }
 
