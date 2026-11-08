@@ -14,13 +14,13 @@ export default function SignIn() {
   const [mode, setMode] = useState<'login' | 'register'>(params.get('mode') === 'register' ? 'register' : 'login');
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [name, setName] = useState('');
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
-  if (user) return <Navigate to={mode === 'register' ? '/welcome' : '/dashboard'} replace />;
+  if (user) return <Navigate to={user.role === 'admin' ? '/admin' : mode === 'register' ? '/welcome' : '/dashboard'} replace />;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setError(''); setBusy(true);
     try {
-      if (mode === 'login') await login(email, password); else await register(email, password, name);
-      nav(mode === 'register' ? '/welcome' : '/dashboard');
+      const u = mode === 'login' ? await login(email, password) : await register(email, password, name);
+      nav(u.role === 'admin' ? '/admin' : mode === 'register' ? '/welcome' : '/dashboard');
     } catch (err) { setError(err instanceof ApiError ? err.message : 'Something went wrong'); } finally { setBusy(false); }
   };
   return (

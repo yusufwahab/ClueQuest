@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { api, setTeacherToken, teacherToken } from './api';
 
 export interface User { id: string; email: string; displayName: string; role: string }
-interface AuthState { user: User | null; loading: boolean; login(email: string, password: string): Promise<void>; register(email: string, password: string, displayName: string): Promise<void>; logout(): void }
+interface AuthState { user: User | null; loading: boolean; login(email: string, password: string): Promise<User>; register(email: string, password: string, displayName: string): Promise<User>; logout(): void }
 
 const Ctx = createContext<AuthState | null>(null);
 
@@ -13,7 +13,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!teacherToken()) return;
     api<{ user: User }>('GET', '/me').then((r) => setUser(r.user)).catch(() => setTeacherToken(null)).finally(() => setLoading(false));
   }, []);
-  const finish = (r: { token: string; user: User }) => { setTeacherToken(r.token); setUser(r.user); };
+  const finish = (r: { token: string; user: User }) => { setTeacherToken(r.token); setUser(r.user); return r.user; };
   const login = useCallback(async (email: string, password: string) => finish(await api('POST', '/auth/login', { body: { email, password }, auth: false })), []);
   const register = useCallback(async (email: string, password: string, displayName: string) => finish(await api('POST', '/auth/register', { body: { email, password, displayName }, auth: false })), []);
   const logout = useCallback(() => { setTeacherToken(null); setUser(null); }, []);

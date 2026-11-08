@@ -9,9 +9,10 @@ import type { PartnerService, WebhookWorker } from './partners';
 import type { Mailer } from './email';
 import type { AiService } from './ai';
 import type { ImageService } from './images';
+import type { AdminService } from './admin';
 
 export interface Ctx {
   env: Env; db: Db; auth: Auth; quizzes: QuizService; attempts: AttemptService; live: LiveService;
-  partners: PartnerService; webhooks: WebhookWorker; mailer: Mailer; ai: AiService; images: ImageService;
+  partners: PartnerService; webhooks: WebhookWorker; mailer: Mailer; ai: AiService; images: ImageService; admin: AdminService;
   limit: (name: string, max: number, windowMs: number, keyFn?: (req: Request) => string) => RequestHandler;
 }

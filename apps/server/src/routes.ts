@@ -118,6 +118,11 @@ export function routes(ctx: Ctx) {
   r.get('/rooms/:roomId/results', teacher, async (req, res) => res.json(await live.roomResults(id(req, 'roomId'), uid(req))));
   r.post('/activities/:id/rooms', teacher, async (req, res) => res.status(201).json(await live.createRoom(uid(req), id(req))));
 
+  // ---- super admin: platform analytics (admin accounts only) ---------------------------------------------------------------
+  const admin = auth.requireAdmin();
+  r.get('/admin/analytics', admin, async (req, res) => res.json(await ctx.admin.analytics(Number(req.query.days) || 30)));
+  r.get('/admin/hosts', admin, async (req, res) => res.json(await ctx.admin.hosts(String(req.query.search ?? '').slice(0, 80), Math.max(1, Number(req.query.page) || 1))));
+
   // ---- public: settings the website needs (never anything secret) --------------------------------------------------------
   r.get('/public/config', limit('pub', 120, 60_000), (_req, res) => res.json({ whatsappLink: env.WHATSAPP_LINK ?? null }));
 

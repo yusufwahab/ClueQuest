@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router';
 import { useAuth } from './lib/auth';
 import { Loading } from './components/ui';
 import Home from './pages/Home';
+import Admin from './pages/admin/Admin';
 import SignIn from './pages/SignIn';
 import Shell from './pages/teacher/Shell';
 import Quizzes from './pages/teacher/Quizzes';
@@ -40,6 +41,7 @@ export default function App() {
       <Route path="/exam/:token" element={<Entry kind="invite" />} />
       <Route path="/launch/:token" element={<Entry kind="launch" />} />
       <Route path="/attempt/:token" element={<AttemptPlay />} />
+      <Route path="/admin" element={<Admin />} />
       <Route path="/welcome" element={<Private><Welcome /></Private>} />
       <Route element={<Private><Shell /></Private>}>
         <Route path="/dashboard" element={<Dashboard />} />

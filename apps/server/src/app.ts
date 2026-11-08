@@ -6,6 +6,7 @@ import cors from 'cors';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import helmet from 'helmet';
 import { Server as IOServer } from 'socket.io';
+import { AdminService } from './admin';
 import { ZodError } from 'zod';
 import { Auth } from './auth';
 import { migrate, openDb, type Db } from './db/db';
@@ -43,7 +44,8 @@ export async function createApp(envOverrides: Record<string, string | undefined>
   const partners = new PartnerService(db, env, quizzes);
   const webhooks = new WebhookWorker(db, env);
   attempts.onSubmitted = (id) => { void webhooks.deliverForAttempt(id).catch(() => undefined); };
-  const ctx: Ctx = { env, db, auth, quizzes, attempts, live, partners, webhooks, mailer, ai: new AiService(env), images: new ImageService(db, env), limit: limiter(counter, env) };
+  const ctx: Ctx = { env, db, auth, quizzes, attempts, live, partners, webhooks, mailer, ai: new AiService(env), images: new ImageService(db, env), admin: new AdminService(db), limit: limiter(counter, env) };
+  if (await auth.ensureSuperAdmin() && env.NODE_ENV !== 'test') console.log(`[admin] super admin account ready (${env.SUPER_ADMIN_EMAIL})`);
   if (env.NODE_ENV !== 'test') { const c = cloudinaryConfig(env); console.log(c ? `[images] question pictures are stored on Cloudinary (cloud "${c.cloud}", folder "${c.folder}")` : '[images] question pictures are stored in the database (set CLOUDINARY_URL to use Cloudinary)'); }
   if (env.SEED_DEV_DATA) await seedDevData(ctx);
 

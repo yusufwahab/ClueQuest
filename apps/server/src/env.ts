@@ -55,6 +55,9 @@ export const envSchema = z.object({
   CLOUDINARY_API_BASE: z.string().default('https://api.cloudinary.com'),
   /** A WhatsApp group (or channel) invite link. When set, players are invited to join it after every game. */
   WHATSAPP_LINK: z.string().trim().url().refine((u) => { try { const x = new URL(u); return x.protocol === 'https:' && (x.hostname === 'wa.me' || x.hostname === 'whatsapp.com' || x.hostname.endsWith('.whatsapp.com')); } catch { return false; } }, 'must be a WhatsApp link such as https://chat.whatsapp.com/YourInviteCode').optional(),
+  /** The one super-admin account. Sign in with these two values and you land on the admin page. Both or neither. */
+  SUPER_ADMIN_EMAIL: z.string().trim().email().optional(),
+  SUPER_ADMIN_PASSWORD: z.string().optional(),
   /** Seed a local test partner + demo teacher (development only). */
   SEED_DEV_DATA: bool.default(false),
   RATE_LIMIT_DISABLED: bool.default(false),
@@ -74,6 +77,8 @@ export function loadEnv(rawIn: Record<string, string | undefined> = process.env)
     if (env.RATE_LIMIT_DISABLED) p.push('RATE_LIMIT_DISABLED must be false in production');
     if (env.ALLOWED_ORIGINS.includes('*')) p.push('ALLOWED_ORIGINS must be an explicit allowlist');
   }
+  if (!!env.SUPER_ADMIN_EMAIL !== !!env.SUPER_ADMIN_PASSWORD) p.push('SUPER_ADMIN_EMAIL and SUPER_ADMIN_PASSWORD must be set together');
+  if (env.SUPER_ADMIN_PASSWORD && env.SUPER_ADMIN_PASSWORD.length < (env.NODE_ENV === 'production' ? 12 : 8)) p.push(`SUPER_ADMIN_PASSWORD must be at least ${env.NODE_ENV === 'production' ? 12 : 8} characters`);
   if (env.DB_DRIVER === 'pg' && !env.DATABASE_URL) p.push('DATABASE_URL is required when DB_DRIVER=pg');
   try { cloudinaryConfig(env); } catch (e) { p.push((e as Error).message); }
   if (env.EMAIL_MODE === 'brevo' && (!env.BREVO_API_KEY || !env.BREVO_SENDER_EMAIL)) p.push('BREVO_API_KEY and BREVO_SENDER_EMAIL are required when EMAIL_MODE=brevo');
