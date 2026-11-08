@@ -109,3 +109,19 @@ describe('players see what the host sees', () => {
     for (const s of [host, ann, ben]) s.close();
   });
 });
+
+describe('a game that has ended', () => {
+  it('says so plainly, with the quest title, instead of "no open game"', async () => {
+    const r = await room();
+    const host = await connect(h, { code: r.code, accessToken: tk });
+    expect((await ask(host, 'host', { cmd: 'end' })).ok).toBe(true); // cancelled from the lobby
+    const info = await api(h, 'GET', `/rooms/by-code/${r.code}`);
+    expect(info.status).toBe(410);
+    expect(info.body).toMatchObject({ code: 'ended', error: 'This game was cancelled by the host.', details: { phase: 'cancelled' } });
+    expect(info.body.details.title).toBeTruthy();
+    const join = await api(h, 'POST', `/rooms/by-code/${r.code}/join`, { body: { nickname: 'Late' } });
+    expect(join.status).toBe(410);
+    expect((await api(h, 'GET', '/rooms/by-code/000000')).status).toBe(404); // a code that never existed
+    host.close();
+  });
+});

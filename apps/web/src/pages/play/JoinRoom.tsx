@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { brand } from '@cluequest/config';
 import { formatRoomCode, normaliseRoomCode } from '@cluequest/game-core';
 import { ApiError, api } from '../../lib/api';
+import { useAuth } from '../../lib/auth';
 import { Backdrop, Logo, Notice } from '../../components/ui';
 import { AvatarEditor, AvatarView, loadAvatar, saveAvatar } from '../../components/Avatar';
 import { NotStarted } from '../../components/Schedule';
@@ -16,14 +17,19 @@ export default function JoinRoom() {
   const [nick, setNick] = useState(localStorage.getItem('cq.nick') ?? '');
   const [room, setRoom] = useState<any>(null);
   const [error, setError] = useState('');
+  const [ended, setEnded] = useState<{ title: string; phase: string } | null>(null);
+  const { user } = useAuth();
   const [busy, setBusy] = useState(false);
   const [avatar, setAvatar] = useState(() => loadAvatar());
   const [editing, setEditing] = useState(false);
   const saved = code.length === 6 ? localStorage.getItem(roomKey(code)) : null;
 
-  const check = () => api('GET', `/rooms/by-code/${code}`, { auth: false }).then(setRoom).catch((e) => setError(e instanceof ApiError ? e.message : 'Could not check the code'));
+  const check = () => api('GET', `/rooms/by-code/${code}`, { auth: false }).then(setRoom).catch((e) => {
+    if (e instanceof ApiError && e.code === 'ended') setEnded({ title: e.details?.title ?? 'This game', phase: e.details?.phase ?? 'finished' });
+    else setError(e instanceof ApiError ? e.message : 'Could not check the code');
+  });
   useEffect(() => {
-    setRoom(null); setError('');
+    setRoom(null); setError(''); setEnded(null);
     if (code.length !== 6) return;
     void check();
   }, [code]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -34,13 +40,27 @@ export default function JoinRoom() {
       const r = await api('POST', `/rooms/by-code/${code}/join`, { body: { nickname: nick || 'Player', resumeToken: saved ?? undefined, avatar }, auth: false });
       saveAvatar(avatar); localStorage.setItem(roomKey(code), r.token); localStorage.setItem('cq.nick', r.nickname);
       nav(`/play/${code}`);
-    } catch (err) { if (err instanceof ApiError && err.code === 'not_started') void check(); setError(err instanceof ApiError ? err.message : 'Could not join'); setBusy(false); }
+    } catch (err) { if (err instanceof ApiError && (err.code === 'not_started' || err.code === 'ended')) void check(); setError(err instanceof ApiError ? err.message : 'Could not join'); setBusy(false); }
   };
 
   return (
     <Backdrop><main className="container-page max-w-md py-10">
       <Link to="/" className="mb-6 flex items-center gap-2.5 font-brand text-2xl font-extrabold text-white"><Logo light size={34} />{brand.name}</Link>
-      {room && room.schedule && !room.schedule.canJoin && room.schedule.startsAt && !saved ? (
+      {ended ? (
+        <div className="card animate-rise space-y-4 text-center" role="status">
+          <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-primary-soft text-3xl" aria-hidden>🏁</div>
+          <div>
+            <p className="font-display text-sm font-extrabold uppercase tracking-[0.18em] text-primary">{ended.phase === 'cancelled' ? 'Game cancelled' : 'Game over'}</p>
+            <h1 className="mt-1 text-3xl">This game has ended</h1>
+          </div>
+          <p className="text-muted"><strong className="text-ink">{ended.title}</strong> {ended.phase === 'cancelled' ? 'was cancelled by the host.' : 'has finished, so nobody can join it now.'} Ask your host for a new code if there is another round.</p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
+            {saved && <Link className="btn btn-secondary" to={`/play/${code}`}>See the results</Link>}
+            <Link className="btn btn-primary" to={user ? '/dashboard' : '/sign-in?mode=register'}>{user ? 'Host your own game' : 'Host your own game, free'}</Link>
+            <button type="button" className="btn btn-secondary" onClick={() => { setCode(''); setEnded(null); setError(''); nav('/join'); }}>Try another code</button>
+          </div>
+        </div>
+      ) : room && room.schedule && !room.schedule.canJoin && room.schedule.startsAt && !saved ? (
         <NotStarted title={room.title} startsAt={room.schedule.startsAt} mode={room.schedule.mode} serverNow={room.schedule.serverNow} what="live quest" onReady={() => void check()} />
       ) : (
       <form className="card animate-rise space-y-4" onSubmit={join}>

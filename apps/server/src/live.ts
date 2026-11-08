@@ -74,7 +74,8 @@ export class LiveService {
 
   async preview(code: string) {
     const r = await this.byCode(code);
-    if (!r || TERMINAL.includes(r.phase)) throw new HttpError(404, 'No open game has that code', 'not_found');
+    if (!r) throw new HttpError(404, 'No game has that code. Check the 6 digits and try again.', 'not_found');
+    if (TERMINAL.includes(r.phase)) throw new HttpError(410, r.phase === 'cancelled' ? 'This game was cancelled by the host.' : 'This game has ended.', 'ended', { title: r.activity.title, phase: r.phase });
     const n = await one<any>(this.db, 'select count(*)::int as n from room_players where room_id=$1 and not removed', [r.id]);
     const sc = scheduleState(r.activity.settings, Date.now());
     const waiting = r.phase === 'lobby' && !sc.joinOpen;
@@ -84,7 +85,8 @@ export class LiveService {
   // ---- players -----------------------------------------------------------------------------------------------
   async join(code: string, nickname: string, resumeToken?: string, avatar?: unknown) {
     const r = await this.byCode(code);
-    if (!r || TERMINAL.includes(r.phase)) throw new HttpError(404, 'No open game has that code', 'not_found');
+    if (!r) throw new HttpError(404, 'No game has that code. Check the 6 digits and try again.', 'not_found');
+    if (TERMINAL.includes(r.phase)) throw new HttpError(410, r.phase === 'cancelled' ? 'This game was cancelled by the host.' : 'This game has ended.', 'ended', { title: r.activity.title, phase: r.phase });
     const existingId = this.playerFromToken(resumeToken);
     if (existingId) {
       const p = await one<any>(this.db, 'select * from room_players where id=$1 and room_id=$2 and not removed', [existingId, r.id]);
