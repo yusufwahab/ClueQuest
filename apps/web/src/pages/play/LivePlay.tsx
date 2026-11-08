@@ -7,6 +7,7 @@ import { Loading, Notice, OptionBadge } from '../../components/ui';
 import { StepScene } from '../../components/StepScene';
 import { AvatarEditor, AvatarView, saveAvatar, type Avatar } from '../../components/Avatar';
 import { ChatBox, ReactionBar, ReactionLayer, Roster } from '../../components/RoomSocial';
+import { LobbySchedule } from '../../components/Schedule';
 import { AnswerPop, Confetti, useAnswerPop } from '../../components/Feedback';
 import { QuestionImage, Rich } from '../../components/Rich';
 import { roomKey } from './JoinRoom';
@@ -92,6 +93,7 @@ export default function LivePlay() {
                   <p className="font-semibold text-white/90">Waiting for the host to start. {s.playerCount} player{s.playerCount === 1 ? '' : 's'} here.</p>
                 </div>
               </div>
+              <div className="relative mt-3"><LobbySchedule schedule={s.schedule} dark /></div>
               <p className="relative mt-3 text-sm text-white/80">{s.style === 'points' ? 'Points: each correct answer earns its points.' : `Steps: climb one step per correct answer${s.steps.wrong === 'down' ? '; a wrong or missing answer moves you down one.' : '; a wrong or missing answer keeps you where you are.'}`}</p>
             </div>
 

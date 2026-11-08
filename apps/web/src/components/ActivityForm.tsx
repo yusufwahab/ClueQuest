@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ApiError, api } from '../lib/api';
 import { Field, Icon, Notice, Stepper } from './ui';
 import ScoringChoice from './ScoringChoice';
+import { ScheduleFields, fromLocalInput, type StartMode } from './Schedule';
 
 type Mode = 'solo' | 'live' | 'cbt';
 const MODE_TEXT: Record<Mode, { name: string; icon: 'solo' | 'live' | 'exam'; desc: string }> = {
@@ -23,6 +24,7 @@ export default function ActivityForm({ quizId, fixedMode, submitLabel = 'Create'
   const [pass, setPass] = useState(defaults?.passMarkPercent != null ? String(defaults.passMarkPercent) : ''); const [instant, setInstant] = useState(false); const [secs, setSecs] = useState(30);
   const [opens, setOpens] = useState(''); const [closes, setCloses] = useState(''); const [duration, setDuration] = useState(30);
   const [attempts, setAttempts] = useState(1); const [release, setRelease] = useState<'immediate' | 'after_close' | 'manual'>('immediate'); const [showAnswers, setShowAnswers] = useState(true);
+  const [startMode, setStartMode] = useState<StartMode>('instant'); const [startsAt, setStartsAt] = useState('');
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
 
   const names = fixedMode ? ['Scoring', 'Settings'] : ['How', 'Scoring', 'Settings'];
@@ -34,6 +36,7 @@ export default function ActivityForm({ quizId, fixedMode, submitLabel = 'Create'
     setError(''); setBusy(true);
     try {
       const body: any = { quizId, mode, style, steps: { wrong }, passMarkPercent: pass === '' ? null : Number(pass), showAnswers };
+      if (mode !== 'cbt') { body.startMode = startMode; body.startsAt = startMode === 'instant' ? null : fromLocalInput(startsAt); }
       if (mode === 'solo') body.instantFeedback = instant;
       if (mode === 'live') body.secondsPerQuestion = secs;
       if (mode === 'cbt') Object.assign(body, { opensAt: toIso(opens), closesAt: toIso(closes), durationMinutes: duration, attemptLimit: attempts, release });
@@ -79,6 +82,7 @@ export default function ActivityForm({ quizId, fixedMode, submitLabel = 'Create'
             <h3 className="text-lg font-extrabold">Last step: a few settings</h3>
             <p className="hint">{MODE_TEXT[mode].name} · {style === 'points' ? 'Points' : 'Steps'}. The defaults are fine, so you can create it as it is.</p>
           </div>
+          {mode !== 'cbt' && <ScheduleFields mode={startMode} at={startsAt} onMode={setStartMode} onAt={setStartsAt} noun={mode === 'live' ? 'The game' : 'The link'} />}
           {mode === 'live' && <Field label="Seconds per question" htmlFor="secs"><input id="secs" type="number" min={5} max={300} className="field" value={secs} onChange={(e) => setSecs(Number(e.target.value))} /></Field>}
           {mode === 'solo' && (
             <label className="flex items-start gap-3"><input type="checkbox" className="mt-1 h-5 w-5 accent-[#5b3df5]" checked={instant} onChange={(e) => setInstant(e.target.checked)} />

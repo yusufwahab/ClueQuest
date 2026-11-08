@@ -8,6 +8,7 @@ import { CopyButton, CopyField, Loading, Notice, PageHead } from '../../componen
 import { StepRace } from '../../components/StepScene';
 import { QuestionImage, Rich } from '../../components/Rich';
 import { ChatBox, ReactionBar, ReactionLayer, Roster } from '../../components/RoomSocial';
+import { LobbySchedule } from '../../components/Schedule';
 
 export default function HostRoom() {
   const { code = '' } = useParams();
@@ -34,6 +35,7 @@ export default function HostRoom() {
 
       {s.phase === 'lobby' && (
         <section className="space-y-4">
+          <LobbySchedule schedule={s.schedule} host />
           <div className="card space-y-4">
             <p className="chip">Step 1 · Share the code</p>
             <CopyField label="Room code" value={formatRoomCode(code)} big hint={`Players open ${location.host}, tap “Join a live game” and type this code.`} />

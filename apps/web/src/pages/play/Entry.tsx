@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { brand } from '@cluequest/config';
 import { ApiError, api } from '../../lib/api';
 import { Backdrop, Loading, Logo, Notice, fmtDate } from '../../components/ui';
+import { NotStarted } from '../../components/Schedule';
 
 type Kind = 'solo' | 'invite' | 'launch';
 const base = (kind: Kind, key: string) => (kind === 'solo' ? `/public/solo/${key}` : kind === 'invite' ? `/public/invite/${key}` : `/launch/${key}`);
@@ -22,7 +23,8 @@ export default function Entry({ kind }: { kind: Kind }) {
   const [ready, setReady] = useState(false);
   const [cid, setCid] = useState('');
 
-  useEffect(() => { api('GET', base(kind, key), { auth: false }).then(setInfo).catch(setError); }, [kind, key]);
+  const load = () => api('GET', base(kind, key), { auth: false }).then(setInfo).catch(setError);
+  useEffect(() => { void load(); }, [kind, key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const start = async () => {
     setBusy(true); setError(null);
@@ -98,7 +100,10 @@ export default function Entry({ kind }: { kind: Kind }) {
           {error.code === 'launch_expired' && info?.returnUrl && <a className="btn btn-secondary" href={info.returnUrl}>Return to class</a>}
         </div>
       )}
-      {info && (
+      {info && kind === 'solo' && info.schedule && !info.schedule.open && info.schedule.startsAt && (
+        <NotStarted title={info.title} startsAt={info.schedule.startsAt} mode={info.schedule.mode} serverNow={info.schedule.serverNow} onReady={() => void load()} />
+      )}
+      {info && !(kind === 'solo' && info.schedule && !info.schedule.open) && (
         <div className="card animate-rise space-y-4">
           <div>
             <h1 className="text-3xl">{info.title}</h1>

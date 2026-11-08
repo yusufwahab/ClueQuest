@@ -5,3 +5,4 @@ export * from './rng';
 export * from './nickname';
 export * from './roomcode';
 export * from './avatar';
+export * from './schedule';

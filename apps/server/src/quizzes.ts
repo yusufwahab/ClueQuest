@@ -1,5 +1,5 @@
 import { randomBytes, randomInt } from 'node:crypto';
-import { draftSchema, activitySchema, validatePublishable, type ActivityInput, type Question } from '@cluequest/contracts';
+import { draftSchema, activitySchema, scheduleSchema, validatePublishable, type ActivityInput, type Question } from '@cluequest/contracts';
 import type { Db } from './db/db';
 import { HttpError, many, one, sha256 } from './db/util';
 import type { Env } from './env';
@@ -88,7 +88,15 @@ export class QuizService {
     const ver = await this.getVersion(quiz.id, quiz.latest_version);
     return this.insertActivity({ ownerId, quizId: quiz.id, version: ver.version, mode: a.mode, style: a.style, title: a.title || ver.title, settings: this.settingsOf(a) });
   }
-  assertSettings(a: { mode: string; opensAt?: string | null; closesAt?: string | null; durationMinutes?: number | null }) {
+  /** A scheduled start needs a time in the future (a minute of slack for a slow click). Instant has no time. */
+  assertSchedule(mode: string, a: { startMode?: string; startsAt?: string | null }, checkFuture = true) {
+    if (mode === 'cbt') return;
+    if (!a.startMode || a.startMode === 'instant') return;
+    if (!a.startsAt) throw new HttpError(422, 'Choose the date and time it starts', 'bad_schedule');
+    if (checkFuture && Date.parse(a.startsAt) < Date.now() - 60_000) throw new HttpError(422, 'The start time has already passed. Choose a time in the future.', 'bad_schedule');
+  }
+  assertSettings(a: { mode: string; opensAt?: string | null; closesAt?: string | null; durationMinutes?: number | null; startMode?: string; startsAt?: string | null }) {
+    this.assertSchedule(a.mode, a);
     if (a.opensAt && a.closesAt && new Date(a.opensAt) >= new Date(a.closesAt)) throw new HttpError(422, 'The exam must close after it opens', 'bad_window');
     if (a.mode === 'cbt' && !a.durationMinutes) throw new HttpError(422, 'Set an exam duration', 'bad_duration');
   }
@@ -111,6 +119,28 @@ export class QuizService {
   shape(r: any) {
     return { id: r.id, quizId: r.quiz_id, quizVersion: r.quiz_version, mode: r.mode, style: r.style, title: r.title, settings: r.settings, shareCode: r.share_code, status: r.status, partnerId: r.partner_id, assignmentRef: r.assignment_ref, createdAt: r.created_at };
   }
+  /** Change when a solo or live quest starts. A live quest whose game has begun, or a CBT, cannot be rescheduled. */
+  async setSchedule(id: string, ownerId: string, raw: unknown) {
+    const b = scheduleSchema.parse(raw);
+    const a = await this.ownActivity(id, ownerId);
+    if (a.mode === 'cbt') throw new HttpError(422, 'A CBT has its own opening and closing times', 'wrong_mode');
+    if (a.mode === 'live') {
+      const started = await one<any>(this.db, "select 1 from rooms where activity_id=$1 and phase not in ('lobby','cancelled','finished') limit 1", [id]);
+      if (started) throw new HttpError(409, 'A game is already running, so it can no longer be rescheduled', 'already_started');
+    }
+    this.assertSchedule(a.mode, b);
+    const next = { ...(a.settings as any), startMode: b.startMode, startsAt: b.startMode === 'instant' ? null : b.startsAt, startedAt: null };
+    await this.db.query('update activities set settings=$2 where id=$1', [id, JSON.stringify(next)]);
+    return this.shape({ ...a, settings: next });
+  }
+  /** Solo, host starts it by hand: from now on the link works. */
+  async openNow(id: string, ownerId: string) {
+    const a = await this.ownActivity(id, ownerId);
+    if (a.mode !== 'solo') throw new HttpError(422, 'Only a practice link is opened this way. A live game starts from its room.', 'wrong_mode');
+    const next = { ...(a.settings as any), startedAt: new Date().toISOString() };
+    await this.db.query('update activities set settings=$2 where id=$1', [id, JSON.stringify(next)]);
+    return this.shape({ ...a, settings: next });
+  }
   async activityById(id: string) {
     const r = await one<any>(this.db, 'select * from activities where id=$1', [id]);
     if (!r) throw new HttpError(404, 'Activity not found', 'not_found');
@@ -132,6 +162,7 @@ export class QuizService {
         (select count(*)::int from attempts t where t.activity_id=a.id and t.status='in_progress') as "inProgress",
         (select count(*)::int from rooms r where r.activity_id=a.id) as rooms,
         (select count(*)::int from invitations i where i.activity_id=a.id) as invited,
+        a.settings->>'startMode' as "startMode", a.settings->>'startsAt' as "startsAt", a.settings->>'startedAt' as "startedAt",
         a.settings->>'opensAt' as "opensAt", a.settings->>'closesAt' as "closesAt", (a.settings->>'durationMinutes')::int as "durationMinutes",
         (a.settings->>'attemptLimit')::int as "attemptLimit", coalesce(a.settings->>'access','invited') as access
       from activities a where a.owner_id=$1 order by a.created_at desc`, [ownerId]);

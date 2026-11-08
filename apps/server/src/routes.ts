@@ -1,6 +1,6 @@
 import express, { Router, type Request } from 'express';
 import { aiGenerateSchema, answerOneSchema, inviteSchema, joinRoomSchema, loginSchema, registerSchema, saveAnswersSchema, startAttemptSchema } from '@cluequest/contracts';
-import { isValidRoomCode, normaliseRoomCode } from '@cluequest/game-core';
+import { isValidRoomCode, normaliseRoomCode, scheduleState } from '@cluequest/game-core';
 import type { Ctx } from './ctx';
 import { HttpError, csvSafe, many, one } from './db/util';
 import { isoOrNull } from './attempts';
@@ -11,7 +11,9 @@ const id = (req: Request, k = 'id') => String(req.params[k]);
 
 const brief = (a: any, extra: Record<string, unknown> = {}) => {
   const s = a.settings as any;
+  const sc = scheduleState(s, Date.now());
   return {
+    schedule: { mode: sc.mode, startsAt: sc.startsAt, open: sc.open, serverNow: Date.now() },
     title: a.title, mode: a.mode, style: a.style, status: a.status, quizVersion: a.quiz_version,
     steps: s.steps, access: s.access ?? 'invited', passMarkPercent: s.passMarkPercent ?? null, attemptLimit: s.attemptLimit ?? null,
     durationMinutes: s.durationMinutes ?? null, opensAt: s.opensAt ?? null, closesAt: s.closesAt ?? null, instantFeedback: !!s.instantFeedback,
@@ -79,6 +81,12 @@ export function routes(ctx: Ctx) {
     const a = await quizzes.ownActivity(id(req), uid(req));
     res.json({ ...quizzes.shape(a), attempts: await attempts.listForActivity(a.id), invitations: a.mode === 'cbt' ? await quizzes.invitations(a.id, uid(req)) : [] });
   });
+  r.patch('/activities/:id/schedule', teacher, async (req, res) => {
+    const a = await quizzes.setSchedule(id(req), uid(req), req.body);
+    await live.rearmActivity(a.id);
+    res.json(a);
+  });
+  r.post('/activities/:id/open-now', teacher, async (req, res) => res.json(await quizzes.openNow(id(req), uid(req))));
   r.post('/activities/:id/close', teacher, async (req, res) => { await quizzes.setActivityStatus(id(req), uid(req), 'closed'); res.status(204).end(); });
   r.post('/activities/:id/reopen', teacher, async (req, res) => { await quizzes.setActivityStatus(id(req), uid(req), 'open'); res.status(204).end(); });
   r.post('/activities/:id/invitations', teacher, async (req, res) => {

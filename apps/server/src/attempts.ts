@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { gradeAttempt, hasPassed, optionOrder, type GradedQuestion } from '@cluequest/game-core';
+import { gradeAttempt, hasPassed, optionOrder, scheduleState, type GradedQuestion } from '@cluequest/game-core';
 import type { ResultEvent } from '@cluequest/contracts';
 import type { Db, Queryable } from './db/db';
 import { HttpError, many, one, sha256 } from './db/util';
@@ -39,6 +39,10 @@ export class AttemptService {
     if (act.mode === 'live') throw new HttpError(422, 'This is a live game. Join it with a room code.', 'wrong_mode');
     if (act.mode === 'cbt' && !who.invitationId && !who.learnerRef) throw new HttpError(403, 'This exam needs your personal invitation link', 'needs_identity');
     const now = Date.now();
+    if (act.mode === 'solo') {
+      const sc = scheduleState(s, now);
+      if (!sc.open) throw new HttpError(403, 'This quest has not started yet', 'not_started', { startsAt: sc.startsAt, startMode: sc.mode });
+    }
     if (s.opensAt && now < new Date(s.opensAt).getTime()) throw new HttpError(403, `This exam opens at ${s.opensAt}`, 'not_open', { opensAt: s.opensAt });
     if (s.closesAt && now > new Date(s.closesAt).getTime()) throw new HttpError(403, 'This exam has closed', 'closed', { closesAt: s.closesAt });
   }

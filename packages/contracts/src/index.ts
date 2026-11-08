@@ -91,8 +91,12 @@ export const activitySchema = z.object({
   access: z.enum(['invited', 'link']).default('invited'),
   /** What a learner may see once released. */
   showAnswers: z.boolean().default(true),
+  /** Solo and live: 'instant' = no schedule, 'manual' = the host starts it at or after startsAt, 'auto' = it starts itself at startsAt. */
+  startMode: z.enum(['instant', 'manual', 'auto']).default('instant'),
+  startsAt: z.string().datetime().nullable().default(null),
 });
 export type ActivityInput = z.input<typeof activitySchema>;
+export const scheduleSchema = z.object({ startMode: z.enum(['instant', 'manual', 'auto']), startsAt: z.string().datetime().nullable().default(null) });
 
 export const inviteSchema = z.object({ invitees: z.array(z.object({ name: z.string().trim().min(1).max(80), email: z.string().email() })).min(1).max(200) });
 

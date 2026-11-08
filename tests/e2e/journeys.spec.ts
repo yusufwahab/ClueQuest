@@ -167,6 +167,46 @@ test.describe.serial('ClueQuest journeys', () => {
     await expect(ben.getByText('You finished #2')).toBeVisible();
   });
 
+  test('scheduling: early visitors are told when it starts, a manual practice link opens on the host\'s button, and a live quest set to automatic starts itself', async ({ browser, page, request }) => {
+    await ensureQuest(request);
+    const startsAt = new Date(Date.now() + 3 * 3600_000).toISOString();
+    const act = await createActivity(request, { mode: 'solo', style: 'points', startMode: 'manual', startsAt });
+
+    // someone opens the link too early: they are told it has not started, and when it will
+    const visitor = await (await browser.newContext()).newPage();
+    await visitor.goto(`/q/${act.shareCode}`);
+    await expect(visitor.getByText('Not started yet', { exact: true })).toBeVisible();
+    await expect(visitor.getByText('Starts in', { exact: true })).toBeVisible();
+    await expect(visitor.getByRole('button', { name: 'Start quest' })).toHaveCount(0);
+
+    // the host sees the plan and opens it by hand; the same page then lets the visitor in
+    await signIn(page);
+    await page.goto(`/activities/${act.id}`);
+    await expect(page.getByText('You start it yourself')).toBeVisible();
+    await page.getByRole('button', { name: 'Open it now' }).click();
+    await expect(page.getByText('You opened it. It is open now.')).toBeVisible();
+    await visitor.reload();
+    await expect(visitor.getByRole('button', { name: 'Start quest' })).toBeVisible();
+
+    // the host can turn a schedule back into "instant"
+    const later = await createActivity(request, { mode: 'live', style: 'steps', startMode: 'manual', startsAt });
+    await page.goto(`/activities/${later.id}`);
+    await page.getByRole('button', { name: 'Change schedule' }).click();
+    await page.getByText('Instant', { exact: true }).click();
+    await page.getByRole('button', { name: 'Save schedule' }).click();
+    await expect(page.getByText('Starts straight away. No schedule.')).toBeVisible();
+
+    // a live quest set to start by itself, with a player waiting in the lobby, starts without anyone pressing a button
+    const live = await createActivity(request, { mode: 'live', style: 'steps', secondsPerQuestion: 30, startMode: 'auto', startsAt: new Date(Date.now() + 6000).toISOString() });
+    const room = await (await request.post(`/api/activities/${live.id}/rooms`, { headers: auth() })).json();
+    const player = await (await browser.newContext()).newPage();
+    await player.goto(`/join/${room.code}`);
+    await player.getByLabel('Your nickname').fill('Early bird');
+    await player.getByRole('button', { name: 'Join game' }).click();
+    await expect(player.getByText('You are in')).toBeVisible();
+    await expect(player.getByRole('radio', { name: /^Correct answer/ })).toBeVisible({ timeout: 20_000 });
+  });
+
   test('CBT: invitation only, answers survive a refresh, review before submit, results released later', async ({ browser, request }) => {
     const act = await createActivity(request, { mode: 'cbt', style: 'points', durationMinutes: 20, attemptLimit: 1, passMarkPercent: 50, release: 'manual' });
     const anon = await (await browser.newContext()).newPage();

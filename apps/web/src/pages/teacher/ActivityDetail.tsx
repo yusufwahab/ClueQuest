@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, downloadCsv } from '../../lib/api';
 import { CopyField, Icon, Loading, Modal, Notice, PageHead, fmtDate, pct } from '../../components/ui';
 import InviteCandidates from '../../components/InviteCandidates';
+import SchedulePanel from '../../components/SchedulePanel';
 
 const MODE_NAME: Record<string, string> = { solo: 'Solo practice', live: 'Live game', cbt: 'CBT' };
 
@@ -44,6 +45,8 @@ export default function ActivityDetail() {
           <button role="tab" aria-selected={view === 'results'} className={tabCls(view === 'results')} onClick={() => setTab('results')}>Results ({a.attempts.length})</button>
         </div>
       )}
+
+      {view === 'share' && a.mode !== 'cbt' && !a.partnerId && <SchedulePanel activity={a} onChanged={refresh} />}
 
       {view === 'share' && a.mode === 'solo' && (
         <section className="card space-y-4">

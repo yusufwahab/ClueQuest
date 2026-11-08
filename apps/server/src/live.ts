@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Server as IOServer } from 'socket.io';
-import { REACTIONS, checkChatText, checkNickname, defaultAvatar, disambiguate, gradeAttempt, normaliseAvatar, optionOrder, rankStandings, type Avatar, type Style } from '@cluequest/game-core';
+import { REACTIONS, checkChatText, checkNickname, defaultAvatar, disambiguate, gradeAttempt, normaliseAvatar, optionOrder, rankStandings, scheduleState, type Avatar, type Style } from '@cluequest/game-core';
 import { limits } from '@cluequest/config';
 import type { Db, Queryable } from './db/db';
 import { HttpError, many, one } from './db/util';
@@ -65,6 +65,7 @@ export class LiveService {
     for (let i = 0; i < 8; i++) {
       try {
         const r = await one<any>(this.db, 'insert into rooms(activity_id,host_id,code) values ($1,$2,$3) returning id, code', [activityId, hostId, QuizService.randomRoomCode()]);
+        this.armStart(r.id as string, act.settings);
         return { id: r.id as string, code: r.code as string };
       } catch (e) { if (!/rooms_active_code|duplicate key/.test(String((e as Error).message))) throw e; }
     }
@@ -75,7 +76,9 @@ export class LiveService {
     const r = await this.byCode(code);
     if (!r || TERMINAL.includes(r.phase)) throw new HttpError(404, 'No open game has that code', 'not_found');
     const n = await one<any>(this.db, 'select count(*)::int as n from room_players where room_id=$1 and not removed', [r.id]);
-    return { code: r.code, title: r.activity.title, style: r.activity.style, phase: r.phase, players: n.n };
+    const sc = scheduleState(r.activity.settings, Date.now());
+    const waiting = r.phase === 'lobby' && !sc.joinOpen;
+    return { code: r.code, title: r.activity.title, style: r.activity.style, phase: r.phase, players: n.n, schedule: { mode: sc.mode, startsAt: sc.startsAt, canJoin: !waiting, serverNow: Date.now() } };
   }
 
   // ---- players -----------------------------------------------------------------------------------------------
@@ -87,6 +90,8 @@ export class LiveService {
       const p = await one<any>(this.db, 'select * from room_players where id=$1 and room_id=$2 and not removed', [existingId, r.id]);
       if (p) return { playerId: p.id as string, nickname: p.nickname as string, token: this.playerToken(p.id), resumed: true, roomId: r.id as string };
     }
+    const sc = scheduleState(r.activity.settings, Date.now());
+    if (r.phase === 'lobby' && !sc.joinOpen) throw new HttpError(403, 'This quest has not started yet', 'not_started', { startsAt: sc.startsAt, startMode: sc.mode });
     const chk = checkNickname(nickname);
     if (!chk.ok) throw new HttpError(422, chk.reason, 'bad_nickname');
     const out = await this.run(r.id, async () => {
@@ -98,6 +103,7 @@ export class LiveService {
       return { playerId: p.id as string, nickname: nick, token: this.playerToken(p.id), resumed: false, roomId: r.id as string };
     });
     this.broadcast(r.id);
+    void this.startIfDue(r.id); // an automatic start that was waiting for its first player
     return out;
   }
 
@@ -117,6 +123,47 @@ export class LiveService {
     if (!stored) throw new HttpError(409, 'Time is up for this question', 'closed');
     this.broadcastSoon(roomId);
     return { optionId: stored.option_id as string, locked: true };
+  }
+
+  // ---- scheduled start ------------------------------------------------------------------------------------------------
+  private startTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private disarmStart(roomId: string) { const t = this.startTimers.get(roomId); if (t) clearTimeout(t); this.startTimers.delete(roomId); }
+  /** For a room that starts itself: wake up at the set time. (Long waits are re-armed, since timers cannot exceed about 24 days.) */
+  private armStart(roomId: string, settings: any) {
+    this.disarmStart(roomId);
+    const sc = scheduleState(settings, Date.now());
+    if (sc.mode !== 'auto' || !sc.startsAt || sc.open) return;
+    const wait = Math.min(Date.parse(sc.startsAt) - Date.now(), 2_000_000_000);
+    const t = setTimeout(() => { this.startTimers.delete(roomId); void this.startIfDue(roomId, true); }, Math.max(0, wait));
+    t.unref();
+    this.startTimers.set(roomId, t);
+  }
+  /**
+   * Start an automatic room once its time has come and someone is in it. With nobody there the room waits, and the first
+   * player to arrive starts it. A manual room is never started here: that is the host's button.
+   */
+  async startIfDue(roomId: string, rearm = false) {
+    let started = false;
+    try {
+      await this.run(roomId, async () => {
+        const room = await this.roomRow(roomId);
+        if (room.phase !== 'lobby') return;
+        const sc = scheduleState(room.activity.settings, Date.now());
+        if (sc.mode !== 'auto') return;
+        if (!sc.due) { if (rearm) this.armStart(roomId, room.activity.settings); return; }
+        const n = await one<any>(this.db, 'select count(*)::int as n from room_players where room_id=$1 and not removed', [roomId]);
+        if (!n.n) return;
+        await this.openQuestion(room, 0);
+        await this.db.query('update rooms set version=version+1 where id=$1', [roomId]);
+        started = true;
+      });
+    } catch (e) { console.error('[live] scheduled start', (e as Error).message); }
+    if (started) this.broadcast(roomId);
+  }
+  /** After the host changes a quest's schedule: re-arm every waiting room of that quest. */
+  async rearmActivity(activityId: string) {
+    const rows = await many<any>(this.db, "select r.id, row_to_json(a.*) as activity from rooms r join activities a on a.id=r.activity_id where r.activity_id=$1 and r.phase='lobby'", [activityId]);
+    for (const r of rows) { this.armStart(r.id, r.activity.settings); this.broadcast(r.id); void this.startIfDue(r.id); }
   }
 
   // ---- avatars, chat and reactions ---------------------------------------------------------------------------------------
@@ -212,7 +259,7 @@ export class LiveService {
     return out;
   }
 
-  private clearTimer(roomId: string) { const t = this.timers.get(roomId); if (t) clearTimeout(t); this.timers.delete(roomId); }
+  private clearTimer(roomId: string) { this.disarmStart(roomId); const t = this.timers.get(roomId); if (t) clearTimeout(t); this.timers.delete(roomId); }
   private schedule(roomId: string, deadline: Date) {
     this.clearTimer(roomId);
     const wait = Math.max(0, deadline.getTime() + this.env.ANSWER_GRACE_MS - Date.now());
@@ -300,6 +347,7 @@ export class LiveService {
       // Everyone sees who is in the room and who has answered, just as the host does.
       players: players.map((p) => ({ id: p.id, nickname: p.nickname, avatar: look(p), answered: answers.some((a) => a.player_id === p.id) })),
       chat, chatEnabled: !!room.chat_enabled,
+      schedule: (() => { const sc = scheduleState(s, Date.now()); return { mode: sc.mode, startsAt: sc.startsAt, due: sc.due }; })(),
       myAnswer, me: me ? view(me) : null,
       // Standings appear only once a question is closed, never while answers are still coming in.
       standings: room.phase === 'locked' || room.phase === 'finished' ? table.map(view) : [],
@@ -346,7 +394,9 @@ export class LiveService {
   async recover() {
     const rows = await many<any>(this.db, "select id, deadline from rooms where phase='question'");
     for (const r of rows) this.schedule(r.id, new Date(r.deadline));
+    const waiting = await many<any>(this.db, "select r.id, row_to_json(a.*) as activity from rooms r join activities a on a.id=r.activity_id where r.phase='lobby'");
+    for (const r of waiting) { this.armStart(r.id, r.activity.settings); void this.startIfDue(r.id); }
     return rows.length;
   }
-  stop() { for (const t of this.timers.values()) clearTimeout(t); for (const t of this.pending.values()) clearTimeout(t); this.timers.clear(); this.pending.clear(); }
+  stop() { for (const t of this.startTimers.values()) clearTimeout(t); this.startTimers.clear(); for (const t of this.timers.values()) clearTimeout(t); for (const t of this.pending.values()) clearTimeout(t); this.timers.clear(); this.pending.clear(); }
 }

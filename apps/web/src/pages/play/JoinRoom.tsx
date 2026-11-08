@@ -5,6 +5,7 @@ import { formatRoomCode, normaliseRoomCode } from '@cluequest/game-core';
 import { ApiError, api } from '../../lib/api';
 import { Backdrop, Logo, Notice } from '../../components/ui';
 import { AvatarEditor, AvatarView, loadAvatar, saveAvatar } from '../../components/Avatar';
+import { NotStarted } from '../../components/Schedule';
 
 export const roomKey = (code: string) => `cq.room.${code}`;
 
@@ -20,11 +21,12 @@ export default function JoinRoom() {
   const [editing, setEditing] = useState(false);
   const saved = code.length === 6 ? localStorage.getItem(roomKey(code)) : null;
 
+  const check = () => api('GET', `/rooms/by-code/${code}`, { auth: false }).then(setRoom).catch((e) => setError(e instanceof ApiError ? e.message : 'Could not check the code'));
   useEffect(() => {
     setRoom(null); setError('');
     if (code.length !== 6) return;
-    api('GET', `/rooms/by-code/${code}`, { auth: false }).then(setRoom).catch((e) => setError(e instanceof ApiError ? e.message : 'Could not check the code'));
-  }, [code]);
+    void check();
+  }, [code]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const join = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true); setError('');
@@ -32,12 +34,15 @@ export default function JoinRoom() {
       const r = await api('POST', `/rooms/by-code/${code}/join`, { body: { nickname: nick || 'Player', resumeToken: saved ?? undefined, avatar }, auth: false });
       saveAvatar(avatar); localStorage.setItem(roomKey(code), r.token); localStorage.setItem('cq.nick', r.nickname);
       nav(`/play/${code}`);
-    } catch (err) { setError(err instanceof ApiError ? err.message : 'Could not join'); setBusy(false); }
+    } catch (err) { if (err instanceof ApiError && err.code === 'not_started') void check(); setError(err instanceof ApiError ? err.message : 'Could not join'); setBusy(false); }
   };
 
   return (
     <Backdrop><main className="container-page max-w-md py-10">
       <Link to="/" className="mb-6 flex items-center gap-2.5 font-brand text-2xl font-extrabold text-white"><Logo light size={34} />{brand.name}</Link>
+      {room && room.schedule && !room.schedule.canJoin && room.schedule.startsAt && !saved ? (
+        <NotStarted title={room.title} startsAt={room.schedule.startsAt} mode={room.schedule.mode} serverNow={room.schedule.serverNow} what="live quest" onReady={() => void check()} />
+      ) : (
       <form className="card animate-rise space-y-4" onSubmit={join}>
         <h1 className="text-3xl">Join a live game</h1>
         {!params.code && <div><label className="label" htmlFor="rc">Room code</label><input id="rc" className="field text-center text-2xlst" inputMode="numeric" value={formatRoomCode(code)} onChange={(e) => setCode(normaliseRoomCode(e.target.value).slice(0, 6))} placeholder="000 000" /></div>}
@@ -57,6 +62,7 @@ export default function JoinRoom() {
         </div>
         <button className="btn btn-primary w-full" disabled={busy || !room}>{saved ? 'Rejoin game' : 'Join game'}</button>
       </form>
+      )}
     </main></Backdrop>
   );
 }

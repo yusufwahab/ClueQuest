@@ -9,6 +9,7 @@ export interface RoomState {
   question: null | { id: string; text: string; image: { id: string; alt: string; url: string | null } | null; marks: number; points: number; options: { id: string; text: string }[]; correctId?: string; explanation?: string; counts?: Record<string, number> };
   answered: number; playerCount: number; players: { id: string; nickname: string; avatar: Avatar; answered: boolean }[];
   chat: ChatMessage[]; chatEnabled: boolean;
+  schedule: { mode: 'instant' | 'manual' | 'auto'; startsAt: string | null; due: boolean };
   myAnswer: string | null; me: null | { id: string; nickname: string; avatar: Avatar; rank: number; points: number; step: number; marks: number; correct: number };
   standings: Standing[]; finalStandings: Standing[] | null; role: 'host' | 'player';
   board: { id: string; nickname: string; avatar?: Avatar; step: number }[];
