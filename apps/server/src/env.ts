@@ -53,6 +53,8 @@ export const envSchema = z.object({
   CLOUDINARY_FOLDER: z.string().regex(/^[A-Za-z0-9_-]+$/, 'letters, numbers, _ and - only').default('cluequest'),
   /** Only changed by tests, which point it at a fake Cloudinary. */
   CLOUDINARY_API_BASE: z.string().default('https://api.cloudinary.com'),
+  /** A WhatsApp group (or channel) invite link. When set, players are invited to join it after every game. */
+  WHATSAPP_LINK: z.string().trim().url().refine((u) => { try { const x = new URL(u); return x.protocol === 'https:' && (x.hostname === 'wa.me' || x.hostname === 'whatsapp.com' || x.hostname.endsWith('.whatsapp.com')); } catch { return false; } }, 'must be a WhatsApp link such as https://chat.whatsapp.com/YourInviteCode').optional(),
   /** Seed a local test partner + demo teacher (development only). */
   SEED_DEV_DATA: bool.default(false),
   RATE_LIMIT_DISABLED: bool.default(false),

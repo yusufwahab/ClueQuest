@@ -118,6 +118,9 @@ export function routes(ctx: Ctx) {
   r.get('/rooms/:roomId/results', teacher, async (req, res) => res.json(await live.roomResults(id(req, 'roomId'), uid(req))));
   r.post('/activities/:id/rooms', teacher, async (req, res) => res.status(201).json(await live.createRoom(uid(req), id(req))));
 
+  // ---- public: settings the website needs (never anything secret) --------------------------------------------------------
+  r.get('/public/config', limit('pub', 120, 60_000), (_req, res) => res.json({ whatsappLink: env.WHATSAPP_LINK ?? null }));
+
   // ---- public: solo link --------------------------------------------------------------------------------------------------
   r.get('/public/solo/:code', limit('pub', 120, 60_000), async (req, res) => {
     const a = await quizzes.activityByShareCode(id(req, 'code'));

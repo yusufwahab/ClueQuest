@@ -3,6 +3,7 @@ import { useParams } from 'react-router';
 import { ApiError, api } from '../../lib/api';
 import { Loading, Notice, OptionBadge, Stat, fmtDate, pct } from '../../components/ui';
 import { StepScene } from '../../components/StepScene';
+import WhatsAppPrompt from '../../components/WhatsAppPrompt';
 import { AnswerPop, ScoreCard, useAnswerPop } from '../../components/Feedback';
 import { QuestionImage, Rich } from '../../components/Rich';
 import { ExamAttempt, ExamResult } from './ExamLayout';
@@ -212,6 +213,7 @@ function ResultView({ view }: { view: any }) {
             {r.style === 'points' ? <ScoreCard points={r.points} possible={r.pointsPossible} /> : <><h2>Steps</h2><StepScene position={r.stepPosition} max={r.stepMax} /></>}
             <p className="hint">Points and steps are a game score. Your pass or fail depends on marks only.</p>
           </section>
+          {view.mode !== 'cbt' && <WhatsAppPrompt />}
           {r.review && (
             <section className="space-y-2"><h2>Review</h2>
               <ol className="space-y-3">{r.review.map((q: any, i: number) => (

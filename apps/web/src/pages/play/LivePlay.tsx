@@ -11,6 +11,7 @@ import { LobbySchedule } from '../../components/Schedule';
 import { AnswerPop, Confetti, useAnswerPop } from '../../components/Feedback';
 import { QuestionImage, Rich } from '../../components/Rich';
 import { roomKey } from './JoinRoom';
+import WhatsAppPrompt from '../../components/WhatsAppPrompt';
 
 export default function LivePlay() {
   const { code = '' } = useParams();
@@ -169,6 +170,7 @@ export default function LivePlay() {
                 <p className="relative mt-1 text-lg font-semibold text-white/90">{s.style === 'points' ? `${me.points} points` : `Step ${me.step} of ${s.total}`} · {me.marks} marks</p>
               </div>
             )}
+            <WhatsAppPrompt />
             <Standings rows={s.finalStandings ?? []} style={s.style} total={s.total} meId={me?.id} />
             <Link className="btn btn-secondary" to="/">Home</Link>
           </>
