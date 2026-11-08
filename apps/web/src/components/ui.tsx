@@ -174,14 +174,8 @@ export function Loading({ what = 'Loading' }: { what?: string }) {
 
 /** Brand mark: three rising blocks. Decorative, so it is hidden from assistive tech. */
 export function Logo({ light = false, size = 36 }: { light?: boolean; size?: number }) {
-  return (
-    <svg aria-hidden width={size} height={size} viewBox="0 0 40 40">
-      <rect width="40" height="40" rx="11" fill={light ? '#ffffff' : '#5b3df5'} />
-      <rect x="7" y="23" width="7" height="10" rx="2" fill="#ffc933" />
-      <rect x="16.5" y="16" width="7" height="17" rx="2" fill="#ff6b6b" />
-      <rect x="26" y="8" width="7" height="25" rx="2" fill={light ? '#5b3df5' : '#ffffff'} />
-    </svg>
-  );
+  // the mark has its own white background, so it reads on dark and light pages alike
+  return <img src="/logo-mark.png" alt="" aria-hidden width={size} height={size} className={`shrink-0 rounded-[28%] ${light ? 'ring-1 ring-white/20' : 'ring-1 ring-line'}`} style={{ width: size, height: size }} />;
 }
 
 const ICONS: Record<string, ReactNode> = {

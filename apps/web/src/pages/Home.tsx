@@ -88,7 +88,7 @@ export default function Home() {
       {/* A glass pill that floats over the page */}
       <header className="sticky top-3 z-40 px-3 pt-3 sm:px-6">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 rounded-full bg-white/[0.07] py-1.5 pl-3 pr-1.5 ring-1 sm:gap-3 sm:py-2 sm:pl-5 sm:pr-2 ring-white/15 backdrop-blur-xl">
-          <Link to="/" className="flex min-w-0 shrink items-center gap-1.5 font-brand text-lg font-extrabold text-white sm:gap-2 sm:text-xl"><Logo light size={32} />{brand.name}</Link>
+          <Link to="/" className="flex min-w-0 shrink items-center gap-1.5 font-brand text-lg font-extrabold text-white sm:gap-2 sm:text-xl"><Logo light size={38} />{brand.name}</Link>
           <nav aria-label="Sections" className="hidden items-center gap-7 lg:flex">
             {NAV.map(([label, href]) => <a key={href} href={href} className="font-display text-[0.95rem] font-semibold text-white/75 transition hover:text-white">{label}</a>)}
           </nav>
