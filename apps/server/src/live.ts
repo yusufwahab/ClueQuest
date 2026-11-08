@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Server as IOServer } from 'socket.io';
-import { checkNickname, disambiguate, gradeAttempt, optionOrder, rankStandings, type Style } from '@cluequest/game-core';
+import { REACTIONS, checkChatText, checkNickname, defaultAvatar, disambiguate, gradeAttempt, normaliseAvatar, optionOrder, rankStandings, type Avatar, type Style } from '@cluequest/game-core';
 import { limits } from '@cluequest/config';
 import type { Db, Queryable } from './db/db';
 import { HttpError, many, one } from './db/util';
@@ -79,7 +79,7 @@ export class LiveService {
   }
 
   // ---- players -----------------------------------------------------------------------------------------------
-  async join(code: string, nickname: string, resumeToken?: string) {
+  async join(code: string, nickname: string, resumeToken?: string, avatar?: unknown) {
     const r = await this.byCode(code);
     if (!r || TERMINAL.includes(r.phase)) throw new HttpError(404, 'No open game has that code', 'not_found');
     const existingId = this.playerFromToken(resumeToken);
@@ -93,7 +93,8 @@ export class LiveService {
       const taken = await many<any>(this.db, 'select nickname from room_players where room_id=$1', [r.id]);
       if (taken.length >= Math.min(this.env.MAX_PLAYERS_PER_ROOM, limits.maxLivePlayers)) throw new HttpError(403, 'This game is full', 'full');
       const nick = disambiguate(chk.nickname, new Set(taken.map((t) => t.nickname)));
-      const p = await one<any>(this.db, 'insert into room_players(room_id,nickname,token_hash) values ($1,$2,gen_random_uuid()::text) returning id', [r.id, nick]);
+      const look = normaliseAvatar(avatar) ?? defaultAvatar(nick);
+      const p = await one<any>(this.db, 'insert into room_players(room_id,nickname,token_hash,avatar) values ($1,$2,gen_random_uuid()::text,$3::jsonb) returning id', [r.id, nick, JSON.stringify(look)]);
       return { playerId: p.id as string, nickname: nick, token: this.playerToken(p.id), resumed: false, roomId: r.id as string };
     });
     this.broadcast(r.id);
@@ -118,8 +119,59 @@ export class LiveService {
     return { optionId: stored.option_id as string, locked: true };
   }
 
+  // ---- avatars, chat and reactions ---------------------------------------------------------------------------------------
+  private lastSaid = new Map<string, number>();
+  /** True when this sender is posting faster than allowed. */
+  private tooFast(key: string, gapMs: number) {
+    const now = Date.now(); const last = this.lastSaid.get(key) ?? 0;
+    if (now - last < gapMs) return true;
+    this.lastSaid.set(key, now);
+    if (this.lastSaid.size > 5000) for (const [k, v] of this.lastSaid) if (now - v > 60_000) this.lastSaid.delete(k);
+    return false;
+  }
+
+  async setAvatar(roomId: string, playerId: string, avatar: unknown) {
+    const look = normaliseAvatar(avatar);
+    if (!look) throw new HttpError(400, 'That look is not valid', 'invalid');
+    const mine = await one<any>(this.db, 'select id from room_players where id=$1 and room_id=$2 and not removed', [playerId, roomId]);
+    if (!mine) throw new HttpError(403, 'You are not in this game', 'not_in_room');
+    await this.db.query('update room_players set avatar=$2::jsonb where id=$1', [playerId, JSON.stringify(look)]);
+    await this.db.query('update rooms set version=version+1 where id=$1', [roomId]);
+    this.broadcast(roomId);
+    return { avatar: look };
+  }
+
+  /** Chat and reactions are for the lobby and the breaks between questions, never while a question is open. The host may post any time. */
+  async say(roomId: string, viewer: Viewer, kind: 'chat' | 'reaction', body: unknown) {
+    const room = await this.roomRow(roomId);
+    const host = viewer.kind === 'host';
+    if (room.phase === 'cancelled') throw new HttpError(409, 'This game has ended', 'bad_phase');
+    if (!host && room.phase === 'question') throw new HttpError(409, 'Chat opens again when the question closes.', 'bad_phase');
+    let nickname = 'Host'; let playerId: string | null = null;
+    if (viewer.kind === 'player') {
+      const p = await one<any>(this.db, 'select id,nickname from room_players where id=$1 and room_id=$2 and not removed', [viewer.playerId, roomId]);
+      if (!p) throw new HttpError(403, 'You are not in this game', 'not_in_room');
+      nickname = p.nickname; playerId = p.id;
+    }
+    const who = playerId ?? `host:${roomId}`;
+    if (kind === 'reaction') {
+      if (typeof body !== 'string' || !(REACTIONS as readonly string[]).includes(body)) throw new HttpError(400, 'Unknown reaction', 'invalid');
+      if (this.tooFast(`r:${who}`, 500)) throw new HttpError(429, 'Slow down', 'rate_limited');
+      this.io?.to(`r:${roomId}`).emit('reaction', { id: `${who}:${Date.now()}`, playerId, nickname, reaction: body });
+      return { sent: true };
+    }
+    if (!host && !room.chat_enabled) throw new HttpError(403, 'The host has turned chat off.', 'chat_off');
+    const chk = checkChatText(typeof body === 'string' ? body : '');
+    if (!chk.ok) throw new HttpError(422, chk.reason, 'bad_message');
+    if (this.tooFast(`c:${who}`, 1200)) throw new HttpError(429, 'Wait a moment before sending another message.', 'rate_limited');
+    const row = await one<any>(this.db, 'insert into room_chat(room_id,player_id,nickname,from_host,body) values ($1,$2,$3,$4,$5) returning id, created_at', [roomId, playerId, nickname, host, chk.text]);
+    const msg = { id: Number(row.id), playerId, nickname, host, body: chk.text, at: new Date(row.created_at).getTime() };
+    this.io?.to(`r:${roomId}`).emit('chat', msg);
+    return msg;
+  }
+
   // ---- host commands ---------------------------------------------------------------------------------------------
-  async command(roomId: string, hostId: string, cmd: 'start' | 'lock' | 'next' | 'end' | 'kick', arg?: { playerId?: string }) {
+  async command(roomId: string, hostId: string, cmd: 'start' | 'lock' | 'next' | 'end' | 'kick' | 'chat', arg?: { playerId?: string; on?: boolean }) {
     const out = await this.run(roomId, async () => {
       const room = await this.roomRow(roomId);
       if (room.host_id !== hostId) throw new HttpError(403, 'Only the host can do that', 'forbidden');
@@ -146,6 +198,9 @@ export class LiveService {
           if (room.phase === 'lobby') { await this.db.query("update rooms set phase='cancelled', finished_at=now(), version=version+1 where id=$1", [roomId]); this.clearTimer(roomId); break; }
           if (room.phase === 'question') await this.lockRoom(roomId);
           await this.finishRoom(roomId);
+          break;
+        case 'chat':
+          await this.db.query('update rooms set chat_enabled=$2 where id=$1', [roomId, arg?.on !== false]);
           break;
         case 'kick':
           if (arg?.playerId) await this.db.query('update room_players set removed=true where id=$1 and room_id=$2', [arg.playerId, roomId]);
@@ -202,14 +257,14 @@ export class LiveService {
     const qs = await this.questions(room.activity);
     const scoredUpTo = room.phase === 'question' && !forceAll ? room.q_index - 1 : room.q_index;
     const slice = qs.slice(0, Math.max(0, scoredUpTo + 1));
-    const players = await many<any>(this.db, 'select id,nickname from room_players where room_id=$1 and not removed', [room.id]);
+    const players = await many<any>(this.db, 'select id,nickname,avatar from room_players where room_id=$1 and not removed', [room.id]);
     const rows = await many<any>(this.db, 'select player_id,question_id,option_id from room_answers where room_id=$1', [room.id]);
     const byPlayer = new Map<string, Record<string, string>>();
     for (const r of rows) { const m = byPlayer.get(r.player_id) ?? {}; m[r.question_id] = r.option_id; byPlayer.set(r.player_id, m); }
     const steps = (room.activity.settings as any).steps ?? { wrong: 'stay' };
     const scored = players.map((p) => {
       const g = gradeAttempt(graded(slice), byPlayer.get(p.id) ?? {}, steps);
-      return { id: p.id as string, nickname: p.nickname as string, points: g.points, step: g.stepPosition, marks: g.marksEarned, marksPossible: g.marksPossible, correct: g.correctCount };
+      return { id: p.id as string, nickname: p.nickname as string, avatar: (normaliseAvatar(p.avatar) ?? defaultAvatar(p.nickname)) as Avatar, points: g.points, step: g.stepPosition, marks: g.marksEarned, marksPossible: g.marksPossible, correct: g.correctCount };
     });
     return rankStandings(scored, room.activity.style as Style);
   }
@@ -219,7 +274,9 @@ export class LiveService {
     const qs = await this.questions(room.activity);
     const s = room.activity.settings as any;
     const isHost = viewer.kind === 'host';
-    const players = await many<any>(this.db, 'select id,nickname from room_players where room_id=$1 and not removed order by joined_at', [roomId]);
+    const players = await many<any>(this.db, 'select id,nickname,avatar from room_players where room_id=$1 and not removed order by joined_at', [roomId]);
+    const look = (p: any): Avatar => normaliseAvatar(p.avatar) ?? defaultAvatar(p.nickname);
+    const chat = (await many<any>(this.db, 'select id,player_id,nickname,from_host,body,created_at from (select * from room_chat where room_id=$1 order by id desc limit 40) c order by id', [roomId])).map((c) => ({ id: Number(c.id), playerId: c.player_id as string | null, nickname: c.nickname as string, host: !!c.from_host, body: c.body as string, at: new Date(c.created_at).getTime() }));
     const cur = qs[room.q_index];
     const open = room.phase === 'question' || room.phase === 'locked';
     const answers = cur ? await many<any>(this.db, 'select player_id,option_id from room_answers where room_id=$1 and question_id=$2', [roomId, cur.id]) : [];
@@ -229,7 +286,7 @@ export class LiveService {
     const me = viewer.kind === 'player' ? table.find((t) => t.id === (viewer as any).playerId) : undefined;
     const counts: Record<string, number> = {};
     if (revealed && cur) for (const a of answers) counts[a.option_id] = (counts[a.option_id] ?? 0) + 1;
-    const view = (t: (typeof table)[number]) => ({ id: t.id, nickname: t.nickname, rank: t.rank, points: t.points, step: t.step, marks: t.marks, correct: t.correct });
+    const view = (t: (typeof table)[number]) => ({ id: t.id, nickname: t.nickname, avatar: t.avatar, rank: t.rank, points: t.points, step: t.step, marks: t.marks, correct: t.correct });
     return {
       v: room.version, code: room.code, phase: room.phase as string, title: room.activity.title, style: room.activity.style as Style,
       steps: s.steps ?? { wrong: 'stay' }, secondsPerQuestion: s.secondsPerQuestion ?? 30,
@@ -240,12 +297,14 @@ export class LiveService {
         ...(revealed ? { correctId: cur.correctId, explanation: cur.explanation, counts } : {}),
       } : null,
       answered: answers.length, playerCount: players.length,
-      players: isHost ? players.map((p) => ({ id: p.id, nickname: p.nickname, answered: answers.some((a) => a.player_id === p.id) })) : undefined,
+      // Everyone sees who is in the room and who has answered, just as the host does.
+      players: players.map((p) => ({ id: p.id, nickname: p.nickname, avatar: look(p), answered: answers.some((a) => a.player_id === p.id) })),
+      chat, chatEnabled: !!room.chat_enabled,
       myAnswer, me: me ? view(me) : null,
       // Standings appear only once a question is closed, never while answers are still coming in.
-      standings: room.phase === 'locked' || room.phase === 'finished' ? (isHost ? table : table.slice(0, 10)).map(view) : [],
+      standings: room.phase === 'locked' || room.phase === 'finished' ? table.map(view) : [],
       // Everyone's step, for the shared staircase. Scores only count closed questions, so this never reveals answers that are still coming in.
-      board: room.activity.style === 'steps' ? (room.phase === 'lobby' ? players.map((p) => ({ id: p.id, nickname: p.nickname, step: 0 })) : table.map((t) => ({ id: t.id, nickname: t.nickname, step: t.step }))) : [],
+      board: room.activity.style === 'steps' ? (room.phase === 'lobby' ? players.map((p) => ({ id: p.id, nickname: p.nickname, avatar: look(p), step: 0 })) : table.map((t) => ({ id: t.id, nickname: t.nickname, avatar: t.avatar, step: t.step }))) : [],
       finalStandings: room.phase === 'finished' ? table.map(view) : null,
       role: isHost ? 'host' : 'player',
     };

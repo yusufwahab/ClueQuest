@@ -209,7 +209,7 @@ export function routes(ctx: Ctx) {
     const code = normaliseRoomCode(id(req, 'code'));
     if (!isValidRoomCode(code)) throw new HttpError(400, 'Room codes have 6 digits', 'invalid');
     const b = joinRoomSchema.parse(req.body);
-    const j = await live.join(code, b.nickname, b.resumeToken);
+    const j = await live.join(code, b.nickname, b.resumeToken, b.avatar);
     res.status(j.resumed ? 200 : 201).json({ token: j.token, nickname: j.nickname, resumed: j.resumed, code });
   });
 

@@ -7,13 +7,15 @@ import { Standings, Timer, useCountdown } from '../../components/LiveParts';
 import { CopyButton, CopyField, Loading, Notice, PageHead } from '../../components/ui';
 import { StepRace } from '../../components/StepScene';
 import { QuestionImage, Rich } from '../../components/Rich';
+import { ChatBox, ReactionBar, ReactionLayer, Roster } from '../../components/RoomSocial';
 
 export default function HostRoom() {
   const { code = '' } = useParams();
-  const { state: s, conn, emit, now } = useRoom(code, { accessToken: teacherToken() ?? undefined });
+  const { state: s, conn, emit, now, chat, bursts } = useRoom(code, { accessToken: teacherToken() ?? undefined });
   const [err, setErr] = useState('');
   const left = useCountdown(s?.deadline ?? null, now);
-  const cmd = async (c: string, playerId?: string) => { setErr(''); const r = await emit('host', { cmd: c, playerId }); if (!r.ok) setErr(r.error ?? 'Failed'); };
+  const cmd = async (c: string, playerId?: string, on?: boolean) => { setErr(''); const r = await emit('host', { cmd: c, playerId, on }); if (!r.ok) setErr(r.error ?? 'Failed'); };
+  const say = async (kind: 'chat' | 'reaction', body: string) => { const r = await emit('say', { kind, body }); return { ok: r.ok, error: r.error }; };
   const joinUrl = `${location.origin}/join/${code}`;
 
   if (conn === 'rejected') return <Notice kind="bad">This room is not available to you.</Notice>;
@@ -26,6 +28,7 @@ export default function HostRoom() {
         sub={`${s.style === 'points' ? 'Points' : `Steps (wrong: ${s.steps.wrong === 'down' ? 'move down' : 'stay'})`} · ${s.total} questions · ${s.secondsPerQuestion}s each`}
         actions={s.phase !== 'lobby' ? <div className="flex items-center gap-2 rounded-2xl bg-white/15 px-3 py-2"><span className="text-sm font-bold">Room code</span><span className="font-display text-3xl font-semiboldst" aria-label={`Room code ${code.split('').join(' ')}`}>{formatRoomCode(code)}</span><CopyButton value={code} what="room code" /></div> : undefined}
       />
+      <ReactionLayer bursts={bursts} />
       {conn !== 'online' && <Notice kind="warn">Reconnecting… the game keeps running on the server.</Notice>}
       {err && <Notice kind="bad">{err}</Notice>}
 
@@ -39,8 +42,14 @@ export default function HostRoom() {
           <div className="card space-y-3">
             <p className="chip">Step 2 · Wait for players</p>
             <h2>Lobby — {s.playerCount} joined</h2>
-            {s.playerCount === 0 && <p className="hint">Nobody yet. Names appear here the moment someone joins.</p>}
-            <ul className="flex flex-wrap gap-2">{s.players?.map((p) => <li key={p.id} className="rounded-xl border border-line bg-paper px-3 py-1.5 font-semibold">{p.nickname} <button className="ml-2 text-sm font-normal text-danger underline" onClick={() => cmd('kick', p.id)} aria-label={`Remove ${p.nickname}`}>remove</button></li>)}</ul>
+            {s.playerCount === 0 && <p className="hint">Nobody yet. Players appear here, with their characters, the moment they join.</p>}
+            <Roster players={s.players} onKick={(id) => void cmd('kick', id)} />
+          </div>
+          <div className="card space-y-3">
+            <div className="flex items-center justify-between gap-3"><h2>Chat with your players</h2>
+              <button className="btn btn-secondary min-h-10! px-4! text-base!" aria-pressed={!s.chatEnabled} onClick={() => void cmd('chat', undefined, s.chatEnabled ? false : true)}>{s.chatEnabled ? 'Turn chat off' : 'Turn chat on'}</button></div>
+            <ReactionBar say={say} />
+            <ChatBox messages={chat} say={say} enabled />
           </div>
           <div className="card space-y-3">
             <p className="chip">Step 3 · Start</p>
@@ -61,6 +70,7 @@ export default function HostRoom() {
           })}</ul>
           {s.phase === 'question' && <Timer left={left} total={s.secondsPerQuestion} />}
           <p aria-live="polite"><strong>{s.answered}</strong> of {s.playerCount} answered</p>
+          <Roster players={s.players} showAnswered={s.phase === 'question'} />
           {s.phase === 'locked' && s.question.explanation && <Notice kind="info"><Rich text={s.question.explanation} /></Notice>}
           <div className="flex gap-2">
             {s.phase === 'question' && <button className="btn btn-primary" onClick={() => cmd('lock')}>Lock answers now</button>}
@@ -71,6 +81,9 @@ export default function HostRoom() {
       )}
       {s.style === 'steps' && s.phase !== 'lobby' && s.phase !== 'cancelled' && (
         <section className="space-y-2"><h2>The staircase</h2><StepRace size="big" racers={s.board} max={s.total} />{s.phase === 'question' && <p className="hint">Positions update when you lock the question.</p>}</section>
+      )}
+      {(s.phase === 'locked' || s.phase === 'finished') && (
+        <section className="card space-y-3" aria-label="Chat and reactions"><h2>Chat and reactions</h2><ReactionBar say={say} /><ChatBox messages={chat} say={say} enabled /></section>
       )}
       {s.phase === 'locked' && <section className="space-y-2"><h2>Standings</h2><Standings rows={s.standings} style={s.style} total={s.total} /></section>}
 

@@ -103,7 +103,8 @@ export const startAttemptSchema = z.object({ name: z.string().trim().max(60).opt
 export const saveAnswersSchema = z.object({ answers: z.record(z.string(), z.string().nullable()) });
 export const answerOneSchema = z.object({ questionId: z.string(), optionId: z.string() });
 
-export const joinRoomSchema = z.object({ nickname: z.string().trim().min(2).max(20), resumeToken: z.string().optional() });
+export const avatarSchema = z.object({ color: z.number().int().min(0).max(9), face: z.number().int().min(0).max(7), hat: z.number().int().min(0).max(7), extra: z.number().int().min(0).max(5) });
+export const joinRoomSchema = z.object({ nickname: z.string().trim().min(2).max(20), resumeToken: z.string().optional(), avatar: avatarSchema.optional() });
 
 /** ---- Partner contract (versioned under /api/partner/v1) ---- */
 export const launchSchema = z.object({

@@ -1,4 +1,6 @@
 import { useEffect, useId, useRef } from 'react';
+import { defaultAvatar, normaliseAvatar, type Avatar } from '@cluequest/game-core';
+import { AvatarArt, AvatarView, avatarMain } from './Avatar';
 
 /**
  * The Steps visuals.
@@ -6,7 +8,8 @@ import { useEffect, useId, useRef } from 'react';
  *  - StepRace: every player on one side-on staircase, so everyone sees where everyone else is.
  * Both are plain SVG/CSS (no images, no libraries), move with transforms only, scale to any screen and honour reduced motion.
  */
-export interface Racer { id: string; nickname: string; step: number }
+export interface Racer { id: string; nickname: string; step: number; avatar?: Avatar }
+const lookOf = (who: { nickname: string; avatar?: Avatar | null }) => normaliseAvatar(who.avatar) ?? defaultAvatar(who.nickname);
 
 const STEP_COLORS = [['#5b3df5', '#8b73ff'], ['#38b6ff', '#8bd6ff'], ['#12b886', '#5fddb4'], ['#ffc933', '#ffe07a'], ['#ff6b6b', '#ff9d9d']] as const;
 const AVATARS = ['#5b3df5', '#ff6b6b', '#12b886', '#38b6ff', '#f08c00', '#d6336c', '#7048e8', '#0b7285'];
@@ -15,7 +18,6 @@ type Rgb = readonly [number, number, number];
 const RISER_LOW: Rgb = [196, 184, 255], RISER_HIGH: Rgb = [58, 31, 176];
 const mixRgb = (a: Rgb, b: Rgb, k: number): Rgb => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
 const rgb = (c: Rgb) => `rgb(${Math.round(c[0])} ${Math.round(c[1])} ${Math.round(c[2])})`;
-const initial = (name: string) => (name.trim().charAt(0) || '?').toUpperCase();
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -51,14 +53,33 @@ function Hero() {
 function Pawn({ x, y, r, who }: { x: number; y: number; r: number; who: Racer }) {
   return (
     <g>
-      <circle cx={x} cy={y} r={r} fill={avatarColor(who.id)} stroke="#fff" strokeWidth={Math.max(1, r * 0.2)} />
-      <text x={x} y={y + r * 0.37} textAnchor="middle" fontSize={r * 1.05} fontWeight={800} fill="#fff">{initial(who.nickname)}</text>
+      <circle cx={x} cy={y} r={r * 1.04} fill="#fff" />
+      <svg x={x - r} y={y - r} width={r * 2} height={r * 2} viewBox="2 -12 96 110" overflow="visible"><AvatarArt a={lookOf(who)} /></svg>
     </g>
   );
 }
 
-export function StepScene({ position, max, label = 'Step', others = [], variant = 'hero', decorative = false }: {
-  position: number; max: number; label?: string; others?: Racer[]; variant?: 'hero' | 'banner' | 'compact'; decorative?: boolean;
+/** The player's own character, seen from the front as they stand on their step: their colour, face and hat on a little body. */
+function HeroAvatar({ avatar }: { avatar: Avatar }) {
+  const main = avatarMain(avatar);
+  return (
+    <g>
+      <ellipse cx="0" cy="2" rx="30" ry="6" fill="#171347" opacity="0.22" />
+      <rect x="-15" y="-28" width="12" height="28" rx="5" fill="#2b2370" />
+      <rect x="3" y="-28" width="12" height="28" rx="5" fill="#2b2370" />
+      <ellipse cx="-9" cy="-1" rx="9" ry="5" fill="#171347" />
+      <ellipse cx="9" cy="-1" rx="9" ry="5" fill="#171347" />
+      <rect x="-28" y="-66" width="10" height="30" rx="5" fill={main} />
+      <rect x="18" y="-66" width="10" height="30" rx="5" fill={main} />
+      <rect x="-21" y="-70" width="42" height="46" rx="15" fill={main} />
+      <rect x="-15" y="-62" width="30" height="28" rx="9" fill="#ffc933" />
+      <svg x="-37" y="-132" width="74" height="74" viewBox="2 -12 96 110" overflow="visible"><AvatarArt a={avatar} /></svg>
+    </g>
+  );
+}
+
+export function StepScene({ position, max, label = 'Step', others = [], variant = 'hero', decorative = false, heroAvatar }: {
+  position: number; max: number; label?: string; others?: Racer[]; variant?: 'hero' | 'banner' | 'compact'; decorative?: boolean; heroAvatar?: Avatar | null;
 }) {
   const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
   const n = Math.max(1, max);
@@ -138,7 +159,7 @@ export function StepScene({ position, max, label = 'Step', others = [], variant 
         <polygon points={`400,0 ${VX},${VY} ${VX + HW + (400 - VY - A) * (HW / A)},400 400,400`} fill={`url(#${uid}w)`} opacity="0.85" />
         <g ref={scene} style={{ transformOrigin: `${VX}px ${VY}px` }}>{bands}</g>
         {same.slice(0, 3).map((o, i) => <Pawn key={o.id} who={o} r={13} x={VX + (i % 2 ? 1 : -1) * (46 + Math.floor(i / 2) * 30)} y={370} />)}
-        <g transform={`translate(${VX} 388)`}><g ref={hero}><Hero /></g></g>
+        <g transform={`translate(${VX} 388)`}><g ref={hero}>{heroAvatar ? <HeroAvatar avatar={heroAvatar} /> : <Hero />}</g></g>
         {done && (
           <g>
             {[[60, 110, '#ffc933'], [340, 90, '#ff6b6b'], [95, 200, '#38b6ff'], [310, 190, '#12b886'], [150, 70, '#ff6b6b'], [260, 60, '#ffc933']].map(([x, y, c], i) => (
@@ -192,9 +213,9 @@ export function StepRace({ racers, max, meId, size = 'strip' }: { racers: Racer[
     list.slice(0, shown).forEach((r, idx) => {
       const mine = r.id === meId;
       cells.push(
-        <span key={r.id} title={r.nickname} className={`absolute grid place-items-center rounded-full border-2 border-white font-bold text-white shadow-md transition-[left,bottom] duration-700 ease-[cubic-bezier(0.34,1.3,0.64,1)] ${mine ? 'z-20 ring-2 ring-sun' : 'z-10'}`}
-          style={{ left: `${(i + 0.5) * w}%`, bottom: blockH(i) + 3 + idx * c.gap, width: c.av, height: c.av, marginLeft: -c.av / 2, fontSize: c.av * 0.5, background: avatarColor(r.id) }}>
-          {initial(r.nickname)}
+        <span key={r.id} title={r.nickname} className={`absolute grid place-items-center rounded-full bg-white shadow-md transition-[left,bottom] duration-700 ease-[cubic-bezier(0.34,1.3,0.64,1)] ${mine ? 'z-20 ring-2 ring-sun' : 'z-10'}`}
+          style={{ left: `${(i + 0.5) * w}%`, bottom: blockH(i) + 3 + idx * c.gap, width: c.av, height: c.av, marginLeft: -c.av / 2 }}>
+          <AvatarView avatar={lookOf(r)} size={c.av} />
         </span>,
       );
     });

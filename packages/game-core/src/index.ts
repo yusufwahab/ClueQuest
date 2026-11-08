@@ -4,3 +4,4 @@ export * from './deadline';
 export * from './rng';
 export * from './nickname';
 export * from './roomcode';
+export * from './avatar';

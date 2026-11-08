@@ -53,10 +53,18 @@ export function attachSockets(io: IOServer, ctx: Ctx) {
       if (typeof b?.questionId !== 'string' || typeof b?.optionId !== 'string') throw new HttpError(400, 'Invalid answer', 'invalid');
       return live.submitAnswer(roomId, viewer.playerId, b.questionId, b.optionId);
     }));
-    socket.on('host', wrap(async (b: { cmd?: string; playerId?: string }) => {
+    socket.on('host', wrap(async (b: { cmd?: string; playerId?: string; on?: boolean }) => {
       if (viewer.kind !== 'host') throw new HttpError(403, 'Only the host can do that', 'forbidden');
-      if (!['start', 'lock', 'next', 'end', 'kick'].includes(String(b?.cmd))) throw new HttpError(400, 'Unknown command', 'invalid');
-      return live.command(roomId, viewer.userId, b.cmd as 'start' | 'lock' | 'next' | 'end' | 'kick', { playerId: b.playerId });
+      if (!['start', 'lock', 'next', 'end', 'kick', 'chat'].includes(String(b?.cmd))) throw new HttpError(400, 'Unknown command', 'invalid');
+      return live.command(roomId, viewer.userId, b.cmd as 'start' | 'lock' | 'next' | 'end' | 'kick' | 'chat', { playerId: b.playerId, on: b.on });
+    }));
+    socket.on('avatar', wrap(async (b: { avatar?: unknown }) => {
+      if (viewer.kind !== 'player') throw new HttpError(403, 'Only players have an avatar', 'forbidden');
+      return live.setAvatar(roomId, viewer.playerId, b?.avatar);
+    }));
+    socket.on('say', wrap(async (b: { kind?: string; body?: unknown }) => {
+      if (b?.kind !== 'chat' && b?.kind !== 'reaction') throw new HttpError(400, 'Invalid message', 'invalid');
+      return live.say(roomId, viewer, b.kind, b.body);
     }));
   });
 }
