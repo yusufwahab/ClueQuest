@@ -18,3 +18,14 @@ describe('WHATSAPP_LINK', () => {
     await expect(boot({ WHATSAPP_LINK: 'http://chat.whatsapp.com/AbCd' })).rejects.toThrow(/WHATSAPP_LINK/);
   });
 });
+
+describe('database exposure', () => {
+  it('has row-level security on for every table, so Supabase\'s public web API can read none of them', async () => {
+    const h = await boot();
+    const r = await h.app.db.query("select c.relname from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and not c.relrowsecurity");
+    expect(r.rows.map((x: any) => x.relname)).toEqual([]);
+    const total = await h.app.db.query("select count(*)::int as n from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r'");
+    expect(total.rows[0].n).toBeGreaterThan(10);
+    await h.close();
+  });
+});

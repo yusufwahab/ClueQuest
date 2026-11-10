@@ -122,5 +122,7 @@ export async function migrate(db: Db, opts: { dev: boolean }): Promise<string[]>
   const files = readdirSync(join(DB_DIR, 'migrations')).filter((f) => f.endsWith('.sql') && !f.endsWith('.down.sql')).sort();
   for (const f of files) await run(f, join(DB_DIR, 'migrations', f));
   if (opts.dev) await run('dev/dev_auth', join(DB_DIR, 'dev', 'dev_auth.sql'));
+  // Every start: make sure no table (including ones added later) is readable through Supabase's public web API.
+  try { await db.exec(readFileSync(join(DB_DIR, 'secure.sql'), 'utf8')); } catch (e) { console.warn('[db] could not apply the row-level security step:', (e as Error).message); }
   return applied;
 }
